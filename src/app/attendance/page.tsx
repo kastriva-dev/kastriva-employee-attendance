@@ -169,11 +169,13 @@ export default function AttendancePage(){
           </div>
           <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
           {geo&&<p className="attendance-muted">Lokasi perangkat: {geo.latitude.toFixed(6)}, {geo.longitude.toFixed(6)} · akurasi ±{Math.round(geo.accuracy)} m</p>}
+          <input ref={cameraRef} type="file" accept="image/*" capture="user" onChange={handleSelfie} style={{display:"none"}} />
           <div className="attendance-actions">
             <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
-            <button onClick={()=>submitAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk"}</button>
-            <button onClick={()=>submitAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang"}</button>
+            <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk"}</button>
+            <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang"}</button>
           </div>
+          {photoPreview&&<div style={{marginTop:18,maxWidth:360}}><img src={photoPreview} alt="Pratinjau selfie absensi" style={{width:"100%",borderRadius:14,border:"1px solid #d7e0e8"}}/><p className="attendance-muted">Selfie dengan watermark waktu dan koordinat GPS.</p><div className="attendance-actions"><button onClick={()=>cameraRef.current?.click()} className="secondary" disabled={busy}>Ambil ulang</button><button onClick={submitAttendance} disabled={busy}>{busy?"Mengirim...":"Kirim Absensi"}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
           {error&&<p className="attendance-error">{error}</p>}
           {notice&&<p className="attendance-success">{notice}</p>}
