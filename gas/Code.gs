@@ -40,6 +40,12 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = { employee: createEmployee_(payload) };
         break;
+      case "employees.update":
+        data = updateEmployee_(requireAdmin_(body.sessionToken), payload);
+        break;
+      case "employees.resetPin":
+        data = resetEmployeePin_(requireAdmin_(body.sessionToken), payload, body.sessionToken);
+        break;
       case "employees.setStatus":
         requireAdmin_(body.sessionToken);
         data = setEmployeeStatus_(payload);
@@ -223,6 +229,62 @@ function createEmployee_(payload) {
   const sh = sheet_("Employees");
   if (readObjects_(sh).some(function(r) { return String(r.nik) === nik; })) throw new Error("NIK sudah terdaftar.");
   return addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });
+}
+
+function updateEmployee_(admin, payload) {
+  const id = String(payload.employee_id || "").trim();
+  const nik = String(payload.nik || "").trim();
+  const nama = String(payload.nama || "").trim();
+  const jabatan = String(payload.jabatan || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (!/^\d{6,20}$/.test(nik)) throw new Error("NIK harus 6–20 digit.");
+  if (!nama || nama.length > 100) throw new Error("Nama wajib diisi (maksimal 100 karakter).");
+  if (jabatan.length > 100) throw new Error("Jabatan maksimal 100 karakter.");
+
+  const sh = sheet_("Employees");
+  const rows = readObjects_(sh);
+  const user = rows.find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+  if (rows.some(function(r) { return String(r.employee_id) !== id && String(r.nik) === nik; })) {
+    throw new Error("NIK sudah digunakan karyawan lain.");
+  }
+
+  const map = headerMap_(sh);
+  sh.getRange(user._row, map.nik).setValue(nik);
+  sh.getRange(user._row, map.nama).setValue(nama);
+  sh.getRange(user._row, map.jabatan).setValue(jabatan);
+  log_("employees.update", admin.nik, "Updated employee profile " + id);
+  return { updated: true, employee_id: id, nik: nik, nama: nama, jabatan: jabatan };
+}
+
+function resetEmployeePin_(admin, payload, currentSessionToken) {
+  const id = String(payload.employee_id || "").trim();
+  const pin = String(payload.pin || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (!/^\d{6,12}$/.test(pin)) throw new Error("PIN harus 6–12 digit.");
+
+  const employeeSheet = sheet_("Employees");
+  const user = readObjects_(employeeSheet).find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+
+  const salt = Utilities.getUuid().replace(/-/g, "");
+  const map = headerMap_(employeeSheet);
+  if (map.pin_hash !== map.pin_salt + 1) throw new Error("Kolom PIN pada sheet Employees tidak berurutan. Periksa struktur sheet sebelum reset PIN.");
+  employeeSheet.getRange(user._row, map.pin_salt, 1, 2).setValues([[salt, hashPin_(pin, salt)]]);
+
+  const sessionsSheet = sheet_("Sessions");
+  const sessionMap = headerMap_(sessionsSheet);
+  const sessions = readObjects_(sessionsSheet);
+  const currentTokenHash = currentSessionToken ? sha256_(String(currentSessionToken)) : "";
+  let revoked = 0;
+  sessions.forEach(function(session) {
+    if (String(session.employee_id) === id && !session.revoked_at && String(session.token_hash) !== currentTokenHash) {
+      sessionsSheet.getRange(session._row, sessionMap.revoked_at).setValue(new Date());
+      revoked++;
+    }
+  });
+  log_("employees.pin_reset", admin.nik, "Reset PIN for employee " + id + "; revoked " + revoked + " sessions");
+  return { updated: true, employee_id: id, revokedSessions: revoked };
 }
 
 function addEmployee_(sh, input) {

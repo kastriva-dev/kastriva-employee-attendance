@@ -7,7 +7,7 @@ const MAX_BODY = 2 * 1024 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "auth.login", "auth.me", "auth.logout",
-  "employees.list", "employees.create", "employees.setStatus",
+  "employees.list", "employees.create", "employees.update", "employees.resetPin", "employees.setStatus",
   "attendance.today", "attendance.checkIn", "attendance.checkOut",
   "settings.office.update"
 ];
