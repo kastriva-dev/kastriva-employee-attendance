@@ -12,6 +12,39 @@ async function api(action:string,payload:Record<string,unknown>={}) {
   if(!response.ok||!result.ok)throw new Error(result.error||"Permintaan gagal.");
   return result.data;
 }
+function PhotoCell({record,phase,onPreview}:{record:RecordItem;phase:"masuk"|"pulang";onPreview:(photo:PhotoPreview)=>void}){
+  const [data,setData]=useState<PhotoPreview|null>(null);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const [visible,setVisible]=useState(false);
+  const cellRef=useState<HTMLDivElement|null>(null);
+  useEffect(()=>{
+    const node=document.getElementById("photo-cell-"+record.attendance_id+"-"+phase);
+    if(!node)return;
+    if(!("IntersectionObserver" in window)){setVisible(true);return;}
+    const observer=new IntersectionObserver(entries=>{
+      if(entries.some(entry=>entry.isIntersecting)){setVisible(true);observer.disconnect();}
+    },{rootMargin:"160px"});
+    observer.observe(node);
+    return ()=>observer.disconnect();
+  },[record.attendance_id,phase]);
+  useEffect(()=>{
+    if(!visible||!record.attendance_id)return;
+    let active=true;
+    setLoading(true);
+    api("attendance.photo",{attendance_id:record.attendance_id,phase})
+      .then(result=>{if(active)setData({dataUrl:result.dataUrl,nama:result.nama,nik:result.nik,tanggal:result.tanggal,phase:result.phase,capturedAt:result.capturedAt});})
+      .catch(e=>{if(active)setError(e instanceof Error?e.message:"Foto tidak tersedia.");})
+      .finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  },[visible,record.attendance_id,phase]);
+  if(!(phase==="masuk"?record.jam_masuk:record.jam_pulang))return <span style={{color:"#94a3b8"}}>—</span>;
+  return <div id={"photo-cell-"+record.attendance_id+"-"+phase} style={{minWidth:62}}>
+    {data?<button type="button" onClick={()=>onPreview(data)} title={"Perbesar foto "+phase} style={{display:"block",padding:2,border:"1px solid #dbe4ee",borderRadius:8,background:"#fff",cursor:"zoom-in"}}>
+      <img src={data.dataUrl} alt={"Foto "+phase} loading="lazy" style={{display:"block",width:52,height:66,objectFit:"cover",borderRadius:5}}/>
+    </button>:<div style={{width:56,height:68,border:"1px solid #e2e8f0",borderRadius:8,display:"grid",placeItems:"center",background:"#f8fafc",fontSize:10,color:error?"#b45309":"#64748b",textAlign:"center",padding:3}}>{loading?"Memuat…":error?"Tidak tersedia":"Menunggu"}</div>}
+  </div>;
+}
 function timeLabel(value:string|Date|null|undefined){
   if(!value)return "—";
   const d=value instanceof Date?value:new Date(value);
@@ -88,9 +121,9 @@ export default function AttendanceHistoryPage(){
           </form>
           {error&&<p className="auth-error">{error}</p>}
           {photoError&&<p className="auth-error">{photoError}</p>}
-          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th>{isAdmin&&<th>Bukti selfie</th>}</tr></thead><tbody>
-            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td>{isAdmin&&<td><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button className="refresh" disabled={!r.jam_masuk||photoBusy===r.attendance_id+":masuk"} onClick={()=>openPhoto(r,"masuk")}>{photoBusy===r.attendance_id+":masuk"?"Memuat…":"Masuk"}</button><button className="refresh" disabled={!r.jam_pulang||photoBusy===r.attendance_id+":pulang"} onClick={()=>openPhoto(r,"pulang")}>{photoBusy===r.attendance_id+":pulang"?"Memuat…":"Pulang"}</button></div></td>}</tr>)}
-            {!busy&&!records.length&&<tr><td colSpan={isAdmin?7:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
+          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th>{isAdmin&&<><th>Foto masuk</th><th>Foto pulang</th></>}</tr></thead><tbody>
+            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
+            {!busy&&!records.length&&<tr><td colSpan={isAdmin?8:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
             {busy&&!records.length&&<tr><td colSpan={isAdmin?7:5}>Memuat data dari Google Sheets...</td></tr>}
           </tbody></table></div>
           <div className="section-heading" style={{marginTop:20}}><span>Menampilkan {records.length?offset+1:0}–{Math.min(offset+records.length,total)} dari {total}</span><div style={{display:"flex",gap:8}}><button className="refresh" disabled={busy||offset===0} onClick={()=>load(Math.max(0,offset-limit))}>← Sebelumnya</button><button className="refresh" disabled={busy||offset+limit>=total} onClick={()=>load(offset+limit)}>Berikutnya →</button></div></div>
