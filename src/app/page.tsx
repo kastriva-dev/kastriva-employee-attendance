@@ -1,32 +1,78 @@
 "use client";
-import {useState} from "react";
+import {useEffect,useState} from "react";
+
+type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
+type Employee=User&{created_at?:string;last_login?:string};
+async function api(action:string,payload:Record<string,unknown>={}) {
+  const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
+  const result=await response.json();
+  if(!response.ok||!result.ok) throw new Error(result.error||"Permintaan gagal.");
+  return result.data;
+}
 export default function Home(){
- const [status,setStatus]=useState("Belum diperiksa");
- const [message,setMessage]=useState("Backend GAS belum diperiksa.");
- const [busy,setBusy]=useState(false);
- async function ping(){
-  setBusy(true);setStatus("Memeriksa...");setMessage("Menghubungkan ke Google Apps Script...");
-  try{
-   const r=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"ping",payload:{}})});
-   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Koneksi gagal");
-   setStatus("Terhubung");setMessage("Koneksi berhasil. Waktu server: "+new Date(d.timestamp).toLocaleString("id-ID"));
-  }catch(e){setStatus("Belum terhubung");setMessage(e instanceof Error?e.message:"Koneksi gagal");}
-  finally{setBusy(false);}
- }
- return <main className="shell">
-  <aside className="side"><div className="brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div><p className="navcap">WORKSPACE</p><div className="nav active">▦　Ringkasan</div><div className="nav muted">◷　Data Absensi <small>Segera</small></div><div className="nav muted">♙　Karyawan <small>Segera</small></div><div className="nav muted">⚙　Pengaturan <small>Segera</small></div><div className="profile"><i>K</i><span><b>Kastriva Admin</b><small>Administrator</small></span></div></aside>
-  <section className="main"><header><div><small>WORKSPACE / OVERVIEW</small><h1>Ringkasan Sistem</h1></div><label><i/> Sistem fondasi <b>KA</b></label></header>
-   <div className="content"><section className="hero"><div><span className="pill">ATTENDANCE MANAGEMENT</span><h2>Kelola kehadiran,<br/><em>lebih mudah dan terukur.</em></h2><p>Fondasi sistem absensi digital Kastriva. Integrasi data akan menghubungkan aplikasi, Google Sheets, dan Google Drive.</p></div><div className="visual"><div className="orbit"></div><div className="paper"><b>✓</b><span>ATTENDANCE<br/><strong>READY TO BUILD</strong></span></div></div></section>
-    <div className="heading"><div><small>SYSTEM MONITORING</small><h3>Status Integrasi</h3></div><span>Tahap 01 · Foundation</span></div>
-    <div className="grid">
-     <article><i className="ico blue">N</i><span className="tag ok">READY</span><h4>Next.js Application</h4><p>Antarmuka web dan server API proxy.</p><footer>● Berjalan di aplikasi</footer></article>
-     <article><i className="ico purple">G</i><span className="tag">{status.toUpperCase()}</span><h4>Google Apps Script</h4><p>Backend untuk validasi dan pengolahan data.</p><footer>● {status}</footer></article>
-     <article><i className="ico green">▤</i><span className="tag">NEXT STEP</span><h4>Google Spreadsheet</h4><p>Penyimpanan data karyawan dan kehadiran.</p><footer>● Menunggu inisialisasi GAS</footer></article>
-     <article><i className="ico amber">▣</i><span className="tag">NEXT STEP</span><h4>Google Drive</h4><p>Penyimpanan foto selfie dengan retensi terkontrol.</p><footer>● Retensi maksimal 14 hari</footer></article>
-    </div>
-    <section className="connect"><div><small>CONNECTION TEST</small><h3>Uji koneksi backend</h3><p>{message}</p></div><button onClick={ping} disabled={busy}>{busy?"Memeriksa...":"Uji koneksi GAS"}　↗</button></section>
-    <footer className="copyright">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · Foundation v0.1.0</span></footer>
-   </div>
-  </section>
- </main>;
+  const [user,setUser]=useState<User|null>(null);
+  const [checking,setChecking]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const [nik,setNik]=useState("");
+  const [pin,setPin]=useState("");
+  const [employees,setEmployees]=useState<Employee[]>([]);
+  const [form,setForm]=useState({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});
+  const [notice,setNotice]=useState("");
+
+  async function loadEmployees(){const d=await api("employees.list");setEmployees(d.employees||[]);}
+  useEffect(()=>{api("auth.me").then(d=>{setUser(d.user);if(d.user?.role==="admin")return loadEmployees();}).catch(()=>{}).finally(()=>setChecking(false));},[]);
+
+  async function login(e:React.FormEvent){
+    e.preventDefault();setBusy(true);setError("");
+    try{const d=await api("auth.login",{nik,pin});setUser(d.user);setPin("");if(d.user?.role==="admin")await loadEmployees();}
+    catch(err){setError(err instanceof Error?err.message:"Login gagal.");}
+    finally{setBusy(false);}
+  }
+  async function logout(){setBusy(true);try{await api("auth.logout");}finally{setUser(null);setEmployees([]);setBusy(false);}}
+  async function createEmployee(e:React.FormEvent){
+    e.preventDefault();setBusy(true);setError("");setNotice("");
+    try{await api("employees.create",form);setForm({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});await loadEmployees();setNotice("Karyawan berhasil ditambahkan.");}
+    catch(err){setError(err instanceof Error?err.message:"Gagal menambahkan karyawan.");}
+    finally{setBusy(false);}
+  }
+  async function toggleStatus(item:Employee){
+    setBusy(true);setError("");try{await api("employees.setStatus",{employee_id:item.employee_id,status:item.status==="ACTIVE"?"INACTIVE":"ACTIVE"});await loadEmployees();}
+    catch(err){setError(err instanceof Error?err.message:"Gagal mengubah status.");}finally{setBusy(false);}
+  }
+
+  if(checking)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
+  if(!user)return <main className="auth-shell"><section className="auth-card">
+    <div className="auth-brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE ATTENDANCE</small></span></div>
+    <div className="auth-kicker">SECURE WORKSPACE</div><h1>Selamat datang</h1><p>Masuk menggunakan NIK dan PIN yang telah didaftarkan administrator.</p>
+    <form onSubmit={login} className="auth-form">
+      <label>NIK<input value={nik} onChange={e=>setNik(e.target.value)} inputMode="numeric" autoComplete="username" placeholder="Masukkan NIK" required maxLength={20}/></label>
+      <label>PIN<input value={pin} onChange={e=>setPin(e.target.value)} inputMode="numeric" type="password" autoComplete="current-password" placeholder="Masukkan PIN" required minLength={6} maxLength={12}/></label>
+      {error&&<div className="auth-error">{error}</div>}
+      <button disabled={busy}>{busy?"Memproses...":"Masuk ke sistem"} <span>↗</span></button>
+    </form><small className="auth-foot">© 2026 Kastriva. All rights reserved.</small>
+  </section></main>;
+
+  return <main className="workspace">
+    <aside className="workspace-side"><div className="auth-brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div><div className="side-caption">WORKSPACE</div><div className="side-link active">▦　Ringkasan</div>{user.role==="admin"&&<div className="side-link">♙　Manajemen Karyawan</div>}<div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{user.role==="admin"?"Administrator":"Karyawan"}</small></span></div></aside>
+    <section className="workspace-main"><header className="workspace-header"><div><small>WORKSPACE / OVERVIEW</small><h1>Halo, {user.nama.split(" ")[0]}.</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
+      <div className="workspace-content"><section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Sistem kehadiran<br/><em>yang lebih terukur.</em></h2><p>Selamat datang di ruang kerja digital Kastriva. Modul absensi GPS dan selfie akan hadir pada tahap berikutnya.</p></div><div className="welcome-mark">K</div></section>
+      <div className="profile-panel"><div><small>AKUN AKTIF</small><h3>{user.nama}</h3><p>{user.nik} · {user.jabatan||"Tanpa jabatan"}</p></div><span className="status-active">● {user.status}</span></div>
+      {user.role==="admin"&&<><section className="employee-section"><div className="section-heading"><div><small>PEOPLE MANAGEMENT</small><h2>Tambah Karyawan</h2></div><span>{employees.length} akun</span></div>
+        <form className="employee-form" onSubmit={createEmployee}>
+          <label>NIK<input value={form.nik} onChange={e=>setForm({...form,nik:e.target.value})} inputMode="numeric" required placeholder="NIK karyawan"/></label>
+          <label>Nama lengkap<input value={form.nama} onChange={e=>setForm({...form,nama:e.target.value})} required placeholder="Nama karyawan"/></label>
+          <label>Jabatan<input value={form.jabatan} onChange={e=>setForm({...form,jabatan:e.target.value})} placeholder="Jabatan"/></label>
+          <label>PIN awal<input value={form.pin} onChange={e=>setForm({...form,pin:e.target.value})} type="password" inputMode="numeric" minLength={6} maxLength={12} required placeholder="6–12 digit"/></label>
+          <label>Role<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="employee">Karyawan</option><option value="admin">Admin</option></select></label>
+          <button disabled={busy}>Simpan karyawan</button>
+        </form>{notice&&<p className="success-note">{notice}</p>}{error&&<p className="auth-error">{error}</p>}
+      </section>
+      <section className="employee-section"><div className="section-heading"><div><small>EMPLOYEE DIRECTORY</small><h2>Daftar Karyawan</h2></div><button className="refresh" onClick={()=>loadEmployees()}>Muat ulang ↻</button></div>
+        <div className="employee-list">{employees.map(item=><div className="employee-row" key={item.employee_id}><div className="employee-avatar">{item.nama.slice(0,1).toUpperCase()}</div><div className="employee-info"><b>{item.nama}</b><small>{item.nik} · {item.jabatan||"Tanpa jabatan"} · {item.role}</small></div><span className={item.status==="ACTIVE"?"status-active":"status-inactive"}>{item.status}</span><button className="status-toggle" disabled={busy} onClick={()=>toggleStatus(item)}>{item.status==="ACTIVE"?"Nonaktifkan":"Aktifkan"}</button></div>)}</div>
+      </section></>}
+      {user.role!=="admin"&&<section className="employee-section"><div className="section-heading"><div><small>ATTENDANCE</small><h2>Modul absensi</h2></div><span>Dalam pengembangan</span></div><p>Fitur absensi masuk dan pulang dengan GPS geofencing serta foto selfie akan diaktifkan pada tahap berikutnya.</p></section>}
+      <footer className="workspace-footer">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · v0.2.0</span></footer></div>
+    </section>
+  </main>;
 }
