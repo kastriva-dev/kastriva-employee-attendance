@@ -103,7 +103,7 @@ export default function AttendancePage(){
       <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva" /><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
       <div className="side-caption">WORKSPACE</div>
       <a className="side-link" href="/">▦　Ringkasan</a>
-      <div className="side-link active">◎　Absensi GPS</div>
+      <div className="side-link active">◎　Absensi GPS</div><a className="side-link" href="/attendance/history">▤　Riwayat Absensi</a>
       <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{user.role==="admin"?"Administrator":"Karyawan"}</small></span></div>
     </aside>
     <section className="workspace-main">
