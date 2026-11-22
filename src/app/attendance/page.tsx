@@ -7,6 +7,14 @@ type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;
 type Office={configured:boolean;latitude:number|null;longitude:number|null;radiusMeters:number};
 type Geo={latitude:number;longitude:number;accuracy:number};
 
+async function reverseGeocode(position:Geo):Promise<string>{
+  const query=new URLSearchParams({lat:String(position.latitude),lon:String(position.longitude)});
+  const response=await fetch("/api/reverse-geocode?"+query.toString(),{cache:"no-store",signal:AbortSignal.timeout(6000)});
+  if(!response.ok)throw new Error("Alamat GPS tidak tersedia.");
+  const result=await response.json();
+  return typeof result.address==="string"?result.address:"";
+}
+
 async function api(action:string,payload:Record<string,unknown>={}) {
   const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
   const result=await response.json();
@@ -43,6 +51,7 @@ export default function AttendancePage(){
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [geo,setGeo]=useState<Geo|null>(null);
+  const [geoAddress,setGeoAddress]=useState("");
   const [photoData,setPhotoData]=useState("");
   const [photoPreview,setPhotoPreview]=useState("");
   const [pendingAction,setPendingAction]=useState<"attendance.checkIn"|"attendance.checkOut"|null>(null);
@@ -83,8 +92,11 @@ export default function AttendancePage(){
   async function prepareAttendance(action:"attendance.checkIn"|"attendance.checkOut"){
     setBusy(true);setError("");setNotice("");setPhotoData("");setPhotoPreview("");
     try{
-      const p=await getPosition();setGeo(p);setPendingAction(action);
-      setNotice("GPS terkunci. Silakan ambil selfie menggunakan kamera depan.");
+      const p=await getPosition();setGeo(p);setGeoAddress("");setPendingAction(action);
+      setNotice("GPS terkunci. Mengambil alamat lokasi...");
+      try{const address=await reverseGeocode(p);setGeoAddress(address);}
+      catch{setGeoAddress("");}
+      setNotice("GPS siap. Silakan ambil selfie menggunakan kamera depan.");
       window.setTimeout(()=>cameraRef.current?.click(),150);
     }catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi GPS.");}
     finally{setBusy(false);}
@@ -108,14 +120,16 @@ export default function AttendancePage(){
       canvas.width=Math.round(source.width*scale);canvas.height=Math.round(source.height*scale);
       const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Tidak dapat memproses foto.");
       ctx.drawImage(source,0,0,canvas.width,canvas.height);
-      const h=Math.max(100,Math.round(canvas.height*0.19));
+      const h=Math.max(125,Math.round(canvas.height*0.25));
       ctx.fillStyle="rgba(8,22,38,.78)";ctx.fillRect(0,canvas.height-h,canvas.width,h);
       const size=Math.max(13,Math.round(canvas.width*0.027));ctx.fillStyle="#fff";
       ctx.font="bold "+size+"px Arial";ctx.fillText("KASTRIVA • BUKTI ABSENSI",16,canvas.height-h+size+8);
       ctx.font=Math.max(11,Math.round(size*.78))+"px Arial";
       const stamp=new Intl.DateTimeFormat("id-ID",{timeZone:"Asia/Jakarta",dateStyle:"full",timeStyle:"medium"}).format(new Date());
-      ctx.fillText(stamp+" WIB",16,canvas.height-h+size*2.5);
-      ctx.fillText("GPS "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+" • ±"+Math.round(geo.accuracy)+" m",16,canvas.height-h+size*3.7);
+      ctx.fillText(stamp+" WIB",16,canvas.height-h+size*2.5,canvas.width-32);
+      const addressLine="Lokasi: "+(geoAddress||"Alamat tidak tersedia");
+      ctx.fillText(addressLine.length>105?addressLine.slice(0,102)+"…":addressLine,16,canvas.height-h+size*3.7,canvas.width-32);
+      ctx.fillText("GPS "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+" • ±"+Math.round(geo.accuracy)+" m",16,canvas.height-h+size*4.9,canvas.width-32);
       const data=canvas.toDataURL("image/jpeg",0.68);
       if(data.length>235000)throw new Error("Ukuran foto masih terlalu besar. Ambil ulang dengan resolusi kamera lebih rendah.");
       setPhotoData(data);setPhotoPreview(data);setNotice("Selfie siap. Periksa foto, lalu kirim absensi.");
@@ -172,8 +186,8 @@ export default function AttendancePage(){
           <input ref={cameraRef} type="file" accept="image/*" capture="user" onChange={handleSelfie} style={{display:"none"}} />
           <div className="attendance-actions">
             <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
-            <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk"}</button>
-            <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang"}</button>
+            <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}><span>Absen Masuk</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
+            <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}><span>Absen Pulang</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
           </div>
           {photoPreview&&<div style={{marginTop:18,maxWidth:360}}><img src={photoPreview} alt="Pratinjau selfie absensi" style={{width:"100%",borderRadius:14,border:"1px solid #d7e0e8"}}/><p className="attendance-muted">Selfie dengan watermark waktu dan koordinat GPS.</p><div className="attendance-actions"><button onClick={()=>cameraRef.current?.click()} className="secondary" disabled={busy}>Ambil ulang</button><button onClick={submitAttendance} disabled={busy}>{busy?"Mengirim...":"Kirim Absensi"}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
