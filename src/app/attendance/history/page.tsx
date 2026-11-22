@@ -17,7 +17,6 @@ function PhotoCell({record,phase,onPreview}:{record:RecordItem;phase:"masuk"|"pu
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const [visible,setVisible]=useState(false);
-  const cellRef=useState<HTMLDivElement|null>(null);
   useEffect(()=>{
     const node=document.getElementById("photo-cell-"+record.attendance_id+"-"+phase);
     if(!node)return;
@@ -67,8 +66,6 @@ export default function AttendanceHistoryPage(){
   const [busy,setBusy]=useState(true);
   const [error,setError]=useState("");
   const [photo,setPhoto]=useState<PhotoPreview|null>(null);
-  const [photoBusy,setPhotoBusy]=useState("");
-  const [photoError,setPhotoError]=useState("");
   const limit=50;
   const load=useCallback(async(nextOffset=0)=>{
     setBusy(true);setError("");
@@ -89,15 +86,7 @@ export default function AttendanceHistoryPage(){
     }).catch(()=>{window.location.href="/";});
   },[load]);
   const isAdmin=user?.role==="admin";
-  const openPhoto=async(record:RecordItem,phase:"masuk"|"pulang")=>{
-    const key=record.attendance_id+":"+phase;
-    setPhotoBusy(key);setPhotoError("");setPhoto(null);
-    try{
-      const result=await api("attendance.photo",{attendance_id:record.attendance_id,phase});
-      setPhoto({dataUrl:result.dataUrl,nama:result.nama,nik:result.nik,tanggal:result.tanggal,phase:result.phase,capturedAt:result.capturedAt});
-    }catch(e){setPhotoError(e instanceof Error?e.message:"Foto tidak dapat dimuat.");}
-    finally{setPhotoBusy("");}
-  };
+
   if(!user)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
   return <main className="workspace">
     <aside className="workspace-side">
@@ -120,7 +109,6 @@ export default function AttendanceHistoryPage(){
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
           {error&&<p className="auth-error">{error}</p>}
-          {photoError&&<p className="auth-error">{photoError}</p>}
           <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th>{isAdmin&&<><th>Foto masuk</th><th>Foto pulang</th></>}</tr></thead><tbody>
             {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
             {!busy&&!records.length&&<tr><td colSpan={isAdmin?8:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
