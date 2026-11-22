@@ -20,7 +20,7 @@ function leaveSheet_() {
 
 function validLeaveDate_(value) {
   const s = String(value || "").trim();
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const p = s.split("-").map(Number);
   const d = new Date(Date.UTC(p[0], p[1]-1, p[2]));
   return d.getUTCFullYear() === p[0] && d.getUTCMonth() === p[1]-1 && d.getUTCDate() === p[2];
