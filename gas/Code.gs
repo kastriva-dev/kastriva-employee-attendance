@@ -45,6 +45,18 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = setEmployeeStatus_(payload);
         break;
+      case "attendance.today":
+        data = getTodayAttendance_(requireSession_(body.sessionToken));
+        break;
+      case "attendance.checkIn":
+        data = checkIn_(requireSession_(body.sessionToken), payload);
+        break;
+      case "attendance.checkOut":
+        data = checkOut_(requireSession_(body.sessionToken), payload);
+        break;
+      case "settings.office.update":
+        data = updateOfficeSettings_(requireAdmin_(body.sessionToken), payload);
+        break;
       default:
         return json_({ ok: false, error: "Unknown action" });
     }
