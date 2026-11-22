@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useEffect,useState} from "react";
+import {useCallback,useEffect,useRef,useState,type ChangeEvent} from "react";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
@@ -42,7 +42,7 @@ export default function AttendancePage(){
   const [checking,setChecking]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
-  const [geo,setGeo]=useState<Geo|null>(null);
+  const [geo,setGeo]=useState<Geo|null>(null);\n  const [photoData,setPhotoData]=useState("");\n  const [photoPreview,setPhotoPreview]=useState("");\n  const [pendingAction,setPendingAction]=useState<"attendance.checkIn"|"attendance.checkOut"|null>(null);\n  const cameraRef=useRef<HTMLInputElement>(null);
 
   const refresh=useCallback(async()=>{
     const d=await api("attendance.today");
@@ -76,13 +76,58 @@ export default function AttendancePage(){
     finally{setBusy(false);}
   }
 
-  async function submitAttendance(action:"attendance.checkIn"|"attendance.checkOut"){
+  async function prepareAttendance(action:"attendance.checkIn"|"attendance.checkOut"){
+    setBusy(true);setError("");setNotice("");setPhotoData("");setPhotoPreview("");
+    try{
+      const p=await getPosition();setGeo(p);setPendingAction(action);
+      setNotice("GPS terkunci. Silakan ambil selfie menggunakan kamera depan.");
+      window.setTimeout(()=>cameraRef.current?.click(),150);
+    }catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi GPS.");}
+    finally{setBusy(false);}
+  }
+
+  async function handleSelfie(event:ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];event.target.value="";
+    if(!file)return;
+    if(!file.type.startsWith("image/")){setError("File kamera tidak valid.");return;}
+    if(!geo||!pendingAction){setError("Ambil lokasi GPS terlebih dahulu.");return;}
+    setBusy(true);setError("");
+    try{
+      const source=await new Promise<HTMLImageElement>((resolve,reject)=>{
+        const url=URL.createObjectURL(file);const img=new Image();
+        img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Foto tidak dapat dibaca."));};
+        img.src=url;
+      });
+      const scale=Math.min(1,960/Math.max(source.width,source.height));
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.round(source.width*scale);canvas.height=Math.round(source.height*scale);
+      const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Tidak dapat memproses foto.");
+      ctx.drawImage(source,0,0,canvas.width,canvas.height);
+      const h=Math.max(100,Math.round(canvas.height*0.19));
+      ctx.fillStyle="rgba(8,22,38,.78)";ctx.fillRect(0,canvas.height-h,canvas.width,h);
+      const size=Math.max(13,Math.round(canvas.width*0.027));ctx.fillStyle="#fff";
+      ctx.font="bold "+size+"px Arial";ctx.fillText("KASTRIVA • BUKTI ABSENSI",16,canvas.height-h+size+8);
+      ctx.font=Math.max(11,Math.round(size*.78))+"px Arial";
+      const stamp=new Intl.DateTimeFormat("id-ID",{timeZone:"Asia/Jakarta",dateStyle:"full",timeStyle:"medium"}).format(new Date());
+      ctx.fillText(stamp+" WIB",16,canvas.height-h+size*2.5);
+      ctx.fillText("GPS "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+" • ±"+Math.round(geo.accuracy)+" m",16,canvas.height-h+size*3.7);
+      const data=canvas.toDataURL("image/jpeg",0.68);
+      if(data.length>245000)throw new Error("Ukuran foto masih terlalu besar. Ambil ulang dengan resolusi kamera lebih rendah.");
+      setPhotoData(data);setPhotoPreview(data);setNotice("Selfie siap. Periksa foto, lalu kirim absensi.");
+    }catch(e){setError(e instanceof Error?e.message:"Gagal memproses selfie.");}
+    finally{setBusy(false);}
+  }
+
+  async function submitAttendance(){
+    if(!pendingAction||!photoData){setError("Selfie wajib diambil sebelum mengirim absensi.");return;}
     setBusy(true);setError("");setNotice("");
     try{
-      const p=await getPosition();setGeo(p);
-      const d=await api(action,p);
+      const p=geo||await getPosition();
+      const d=await api(pendingAction,{...p,photoData});
       setRecord(d.record||null);
-      setNotice((action==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
+      setNotice((pendingAction==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat beserta selfie. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
+      setPhotoData("");setPhotoPreview("");setPendingAction(null);
     }catch(e){setError(e instanceof Error?e.message:"Absensi gagal.");}
     finally{setBusy(false);}
   }
@@ -140,7 +185,7 @@ export default function AttendancePage(){
           </form>
           {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}
         </section>}
-        <p className="attendance-muted">Catatan: tahap ini mencatat waktu dan koordinat GPS. Fitur selfie kamera akan ditambahkan pada tahap berikutnya.</p>
+        <p className="attendance-muted">Bukti selfie wajib untuk absen masuk dan pulang. Foto disimpan privat di folder Google Drive yang ditentukan administrator.</p>
       </div>
     </section>
   </main>;
