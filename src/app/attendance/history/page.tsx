@@ -5,6 +5,7 @@ type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;
 type Employee={employee_id:string;nik:string;nama:string};
 type RecordItem={attendance_id:string;employee_id:string;nama:string;nik:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
 type Result={total:number;limit:number;offset:number;records:RecordItem[]};
+type PhotoPreview={dataUrl:string;nama:string;nik:string;tanggal:string;phase:string;capturedAt:string|Date|null};
 async function api(action:string,payload:Record<string,unknown>={}) {
   const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
   const result=await response.json();
@@ -15,6 +16,11 @@ function timeLabel(value:string|Date|null|undefined){
   if(!value)return "—";
   const d=value instanceof Date?value:new Date(value);
   return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString("id-ID",{timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit"});
+}
+function dateTimeLabel(value:string|Date|null|undefined){
+  if(!value)return "—";
+  const d=value instanceof Date?value:new Date(value);
+  return Number.isNaN(d.getTime())?"—":d.toLocaleString("id-ID",{timeZone:"Asia/Jakarta",dateStyle:"medium",timeStyle:"medium"});
 }
 export default function AttendanceHistoryPage(){
   const [user,setUser]=useState<User|null>(null);
@@ -27,6 +33,9 @@ export default function AttendanceHistoryPage(){
   const [offset,setOffset]=useState(0);
   const [busy,setBusy]=useState(true);
   const [error,setError]=useState("");
+  const [photo,setPhoto]=useState<PhotoPreview|null>(null);
+  const [photoBusy,setPhotoBusy]=useState("");
+  const [photoError,setPhotoError]=useState("");
   const limit=50;
   const load=useCallback(async(nextOffset=0)=>{
     setBusy(true);setError("");
@@ -47,6 +56,15 @@ export default function AttendanceHistoryPage(){
     }).catch(()=>{window.location.href="/";});
   },[load]);
   const isAdmin=user?.role==="admin";
+  const openPhoto=async(record:RecordItem,phase:"masuk"|"pulang")=>{
+    const key=record.attendance_id+":"+phase;
+    setPhotoBusy(key);setPhotoError("");setPhoto(null);
+    try{
+      const result=await api("attendance.photo",{attendance_id:record.attendance_id,phase});
+      setPhoto({dataUrl:result.dataUrl,nama:result.nama,nik:result.nik,tanggal:result.tanggal,phase:result.phase,capturedAt:result.capturedAt});
+    }catch(e){setPhotoError(e instanceof Error?e.message:"Foto tidak dapat dimuat.");}
+    finally{setPhotoBusy("");}
+  };
   if(!user)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
   return <main className="workspace">
     <aside className="workspace-side">
@@ -69,15 +87,23 @@ export default function AttendanceHistoryPage(){
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
           {error&&<p className="auth-error">{error}</p>}
-          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th></tr></thead><tbody>
-            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td></tr>)}
-            {!busy&&!records.length&&<tr><td colSpan={isAdmin?6:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
-            {busy&&!records.length&&<tr><td colSpan={isAdmin?6:5}>Memuat data dari Google Sheets...</td></tr>}
+          {photoError&&<p className="auth-error">{photoError}</p>}
+          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th>{isAdmin&&<th>Bukti selfie</th>}</tr></thead><tbody>
+            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td>{isAdmin&&<td><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button className="refresh" disabled={!r.jam_masuk||photoBusy===r.attendance_id+":masuk"} onClick={()=>openPhoto(r,"masuk")}>{photoBusy===r.attendance_id+":masuk"?"Memuat…":"Masuk"}</button><button className="refresh" disabled={!r.jam_pulang||photoBusy===r.attendance_id+":pulang"} onClick={()=>openPhoto(r,"pulang")}>{photoBusy===r.attendance_id+":pulang"?"Memuat…":"Pulang"}</button></div></td>}</tr>)}
+            {!busy&&!records.length&&<tr><td colSpan={isAdmin?7:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
+            {busy&&!records.length&&<tr><td colSpan={isAdmin?7:5}>Memuat data dari Google Sheets...</td></tr>}
           </tbody></table></div>
           <div className="section-heading" style={{marginTop:20}}><span>Menampilkan {records.length?offset+1:0}–{Math.min(offset+records.length,total)} dari {total}</span><div style={{display:"flex",gap:8}}><button className="refresh" disabled={busy||offset===0} onClick={()=>load(Math.max(0,offset-limit))}>← Sebelumnya</button><button className="refresh" disabled={busy||offset+limit>=total} onClick={()=>load(offset+limit)}>Berikutnya →</button></div></div>
         </section>
         <footer className="workspace-footer">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · v0.3.0</span></footer>
       </div>
     </section>
+    {photo&&<div role="dialog" aria-modal="true" aria-label="Pratinjau bukti selfie" onClick={()=>setPhoto(null)} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(7,18,31,.78)",display:"grid",placeItems:"center",padding:18}}>
+      <section onClick={e=>e.stopPropagation()} style={{width:"min(100%,520px)",maxHeight:"92vh",overflow:"auto",background:"#fff",borderRadius:18,padding:18,boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:12}}><div><small style={{color:"#64748b"}}>BUKTI SELFIE · {photo.phase.toUpperCase()}</small><h2 style={{margin:"4px 0",fontSize:20,color:"#173653"}}>{photo.nama}</h2></div><button className="refresh" onClick={()=>setPhoto(null)}>Tutup ✕</button></div>
+        <img src={photo.dataUrl} alt={"Bukti selfie "+photo.phase+" "+photo.nama} style={{display:"block",width:"100%",maxHeight:"62vh",objectFit:"contain",borderRadius:12,background:"#eef2f7"}}/>
+        <div style={{fontSize:13,lineHeight:1.7,color:"#475569",marginTop:12}}><div><b>NIK:</b> {photo.nik}</div><div><b>Tanggal:</b> {photo.tanggal}</div><div><b>Waktu tercatat:</b> {dateTimeLabel(photo.capturedAt)}</div><small>Foto diambil dari Drive privat dan hanya ditampilkan kepada administrator.</small></div>
+      </section>
+    </div>}
   </main>;
 }
