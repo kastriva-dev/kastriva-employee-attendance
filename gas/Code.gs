@@ -7,6 +7,8 @@
 const APP_NAME = "Kastriva Employee Attendance";
 const SHEET_NAMES = ["Employees", "Attendance", "Settings", "Logs", "Sessions"];
 const SESSION_HOURS = 12;
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_SECONDS = 15 * 60;
 
 function doPost(e) {
   try {
@@ -20,9 +22,6 @@ function doPost(e) {
     switch (String(body.action || "")) {
       case "ping":
         data = { service: APP_NAME, status: "online" };
-        break;
-      case "initialize":
-        data = setupSystem();
         break;
       case "auth.login":
         data = login_(payload);
@@ -41,9 +40,18 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = { employee: createEmployee_(payload) };
         break;
+      case "employees.update":
+        data = updateEmployee_(requireAdmin_(body.sessionToken), payload);
+        break;
+      case "employees.resetPin":
+        data = resetEmployeePin_(requireAdmin_(body.sessionToken), payload, body.sessionToken);
+        break;
       case "employees.setStatus":
         requireAdmin_(body.sessionToken);
         data = setEmployeeStatus_(payload);
+        break;
+      case "admin.dashboard":
+        data = getAdminDashboard_(requireAdmin_(body.sessionToken));
         break;
       case "attendance.today":
         data = getTodayAttendance_(requireSession_(body.sessionToken));
@@ -126,12 +134,14 @@ function login_(payload) {
   const nik = String(payload.nik || "").trim();
   const pin = String(payload.pin || "").trim();
   if (!nik || !/^\d{6,12}$/.test(pin)) throw new Error("NIK atau PIN tidak valid.");
+  reserveLoginAttempt_(nik);
   const sh = sheet_("Employees");
   const rows = readObjects_(sh);
   const user = rows.find(function(r) { return String(r.nik) === nik; });
   if (!user || String(user.status).toUpperCase() !== "ACTIVE") throw new Error("NIK/PIN salah atau akun tidak aktif.");
   const expected = hashPin_(pin, String(user.pin_salt || ""));
   if (!constantTimeEquals_(expected, String(user.pin_hash || ""))) throw new Error("NIK/PIN salah atau akun tidak aktif.");
+  clearLoginAttempts_(nik);
   const token = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
   const now = new Date();
   const expires = new Date(now.getTime() + SESSION_HOURS * 60 * 60 * 1000);
@@ -141,6 +151,34 @@ function login_(payload) {
   sh.getRange(user._row, header.last_login).setValue(now);
   log_("auth.login", nik, "Login successful");
   return { sessionToken: token, expiresAt: expires.toISOString(), user: publicUser_(user) };
+}
+
+/** Apply a short, per-NIK login throttle. Cache data is temporary and best-effort. */
+function reserveLoginAttempt_(nik) {
+  const key = "login_attempts_" + sha256_(String(nik));
+  const cache = CacheService.getScriptCache();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const attempts = Number(cache.get(key) || 0);
+    if (attempts >= LOGIN_MAX_ATTEMPTS) {
+      throw new Error("Terlalu banyak percobaan login. Coba lagi dalam 15 menit.");
+    }
+    cache.put(key, String(attempts + 1), LOGIN_WINDOW_SECONDS);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearLoginAttempts_(nik) {
+  const key = "login_attempts_" + sha256_(String(nik));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    CacheService.getScriptCache().remove(key);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function requireSession_(token) {
@@ -196,6 +234,62 @@ function createEmployee_(payload) {
   return addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });
 }
 
+function updateEmployee_(admin, payload) {
+  const id = String(payload.employee_id || "").trim();
+  const nik = String(payload.nik || "").trim();
+  const nama = String(payload.nama || "").trim();
+  const jabatan = String(payload.jabatan || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (!/^\d{6,20}$/.test(nik)) throw new Error("NIK harus 6–20 digit.");
+  if (!nama || nama.length > 100) throw new Error("Nama wajib diisi (maksimal 100 karakter).");
+  if (jabatan.length > 100) throw new Error("Jabatan maksimal 100 karakter.");
+
+  const sh = sheet_("Employees");
+  const rows = readObjects_(sh);
+  const user = rows.find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+  if (rows.some(function(r) { return String(r.employee_id) !== id && String(r.nik) === nik; })) {
+    throw new Error("NIK sudah digunakan karyawan lain.");
+  }
+
+  const map = headerMap_(sh);
+  sh.getRange(user._row, map.nik).setValue(nik);
+  sh.getRange(user._row, map.nama).setValue(nama);
+  sh.getRange(user._row, map.jabatan).setValue(jabatan);
+  log_("employees.update", admin.nik, "Updated employee profile " + id);
+  return { updated: true, employee_id: id, nik: nik, nama: nama, jabatan: jabatan };
+}
+
+function resetEmployeePin_(admin, payload, currentSessionToken) {
+  const id = String(payload.employee_id || "").trim();
+  const pin = String(payload.pin || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (!/^\d{6,12}$/.test(pin)) throw new Error("PIN harus 6–12 digit.");
+
+  const employeeSheet = sheet_("Employees");
+  const user = readObjects_(employeeSheet).find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+
+  const salt = Utilities.getUuid().replace(/-/g, "");
+  const map = headerMap_(employeeSheet);
+  if (map.pin_hash !== map.pin_salt + 1) throw new Error("Kolom PIN pada sheet Employees tidak berurutan. Periksa struktur sheet sebelum reset PIN.");
+  employeeSheet.getRange(user._row, map.pin_salt, 1, 2).setValues([[salt, hashPin_(pin, salt)]]);
+
+  const sessionsSheet = sheet_("Sessions");
+  const sessionMap = headerMap_(sessionsSheet);
+  const sessions = readObjects_(sessionsSheet);
+  const currentTokenHash = currentSessionToken ? sha256_(String(currentSessionToken)) : "";
+  let revoked = 0;
+  sessions.forEach(function(session) {
+    if (String(session.employee_id) === id && !session.revoked_at && String(session.token_hash) !== currentTokenHash) {
+      sessionsSheet.getRange(session._row, sessionMap.revoked_at).setValue(new Date());
+      revoked++;
+    }
+  });
+  log_("employees.pin_reset", admin.nik, "Reset PIN for employee " + id + "; revoked " + revoked + " sessions");
+  return { updated: true, employee_id: id, revokedSessions: revoked };
+}
+
 function addEmployee_(sh, input) {
   const salt = Utilities.getUuid().replace(/-/g, "");
   const now = new Date();
@@ -226,6 +320,56 @@ function setEmployeeStatus_(payload) {
   }
   sh.getRange(user._row, headerMap_(sh).status).setValue(status);
   return { updated: true, employee_id: id, status: status };
+}
+
+function getAdminDashboard_(admin) {
+  const employees = readObjects_(sheet_("Employees"));
+  const attendance = readObjects_(sheet_("Attendance"));
+  const active = employees.filter(function(r) { return String(r.status).toUpperCase() === "ACTIVE"; });
+  const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
+  const todayRows = attendance.filter(function(r) { return attendanceDateKey_(r.tanggal) === today && r.jam_masuk; });
+  const activeIds = {};
+  active.forEach(function(r) { activeIds[String(r.employee_id)] = true; });
+  const attendedIds = {};
+  todayRows.forEach(function(r) {
+    const id = String(r.employee_id);
+    if (activeIds[id]) attendedIds[id] = true;
+  });
+
+  const week = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const date = new Date(Date.now() - offset * 24 * 60 * 60 * 1000);
+    const key = Utilities.formatDate(date, ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
+    const ids = {};
+    attendance.forEach(function(r) {
+      if (attendanceDateKey_(r.tanggal) === key && r.jam_masuk && activeIds[String(r.employee_id)]) ids[String(r.employee_id)] = true;
+    });
+    week.push({ date: key, count: Object.keys(ids).length });
+  }
+
+  const latest = todayRows.slice().sort(function(a, b) {
+    return attendanceTimestampValue_(b) - attendanceTimestampValue_(a);
+  }).slice(0, 8).map(function(r) {
+    return { employee_id: r.employee_id, nik: r.nik, nama: r.nama, jam_masuk: r.jam_masuk, jam_pulang: r.jam_pulang || "", status: r.status || "HADIR" };
+  });
+
+  return {
+    date: today,
+    employeeTotal: employees.length,
+    activeEmployees: active.length,
+    inactiveEmployees: employees.length - active.length,
+    presentToday: Object.keys(attendedIds).length,
+    notCheckedInToday: Math.max(0, active.length - Object.keys(attendedIds).length),
+    checkInsToday: todayRows.length,
+    week: week,
+    latest: latest
+  };
+}
+
+function attendanceTimestampValue_(row) {
+  const value = row.created_at || row.jam_masuk || "";
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function ensureHeaders_(sh, expected) {

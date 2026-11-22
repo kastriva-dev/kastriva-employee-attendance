@@ -3,11 +3,11 @@ import {NextRequest,NextResponse} from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY = 256 * 1024;
+const MAX_BODY = 2 * 1024 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
-  "ping", "initialize", "auth.login", "auth.me", "auth.logout",
-  "employees.list", "employees.create", "employees.setStatus",
+  "ping", "auth.login", "auth.me", "auth.logout",
+  "employees.list", "employees.create", "employees.update", "employees.resetPin", "employees.setStatus", "admin.dashboard",
   "attendance.today", "attendance.checkIn", "attendance.checkOut",
   "settings.office.update"
 ];
@@ -23,21 +23,35 @@ export async function POST(request: NextRequest) {
   try { input = await request.json(); } catch { return NextResponse.json({ok:false,error:"Body JSON tidak valid."},{status:400}); }
   const action = String(input.action || "");
   if (!ALLOWED_ACTIONS.includes(action)) return NextResponse.json({ok:false,error:"Action tidak dikenal."},{status:400});
+  if ((action === "attendance.checkIn" || action === "attendance.checkOut") && String(input.payload?.imageDataUrl || "").length > 1400000) {
+    return NextResponse.json({ok:false,error:"Ukuran foto terlalu besar. Ambil ulang foto dengan kamera."},{status:413});
+  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value || "";
   try {
     const upstream = await fetch(url,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({action,payload:input.payload || {},secret,sessionToken:token}),
-      cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(20000)
+      cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(30000)
     });
     const raw = await upstream.text();
-    let data: Record<string,any>;
-    try { data = JSON.parse(raw); } catch { return NextResponse.json({ok:false,error:"Respons GAS bukan JSON valid."},{status:502}); }
+    let data: Record<string,unknown>;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid response shape");
+      data = parsed as Record<string,unknown>;
+    } catch { return NextResponse.json({ok:false,error:"Respons GAS bukan JSON valid."},{status:502}); }
     if (!upstream.ok) return NextResponse.json({ok:false,error:"GAS gagal memproses permintaan."},{status:502});
 
-    const sessionToken = action === "auth.login" && data.ok ? data.data?.sessionToken : undefined;
-    if (sessionToken) delete data.data.sessionToken;
+    let sessionToken: string | undefined;
+    const responseData = data.data;
+    if (action === "auth.login" && data.ok === true && responseData && typeof responseData === "object" && !Array.isArray(responseData)) {
+      const loginData = responseData as Record<string,unknown>;
+      if (typeof loginData.sessionToken === "string") {
+        sessionToken = loginData.sessionToken;
+        delete loginData.sessionToken;
+      }
+    }
     const response = NextResponse.json(data,{status:data.ok === false ? 400 : 200});
     response.headers.set("Cache-Control","no-store");
     if (sessionToken) response.cookies.set(SESSION_COOKIE,String(sessionToken),{
