@@ -55,6 +55,15 @@ function doPost(e) {
       case "attendance.list":
         data = listAttendanceHistory_(requireSession_(body.sessionToken), payload);
         break;
+      case "leaves.list":
+        data = listLeaveRequests_(requireSession_(body.sessionToken), payload);
+        break;
+      case "leaves.create":
+        data = createLeaveRequest_(requireSession_(body.sessionToken), payload);
+        break;
+      case "leaves.review":
+        data = reviewLeaveRequest_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "attendance.checkIn":
         data = checkIn_(requireSession_(body.sessionToken), payload);
         break;
