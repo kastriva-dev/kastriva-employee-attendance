@@ -52,6 +52,9 @@ function doPost(e) {
       case "attendance.today":
         data = getTodayAttendance_(requireSession_(body.sessionToken));
         break;
+      case "attendance.list":
+        data = listAttendanceHistory_(requireSession_(body.sessionToken), payload);
+        break;
       case "attendance.checkIn":
         data = checkIn_(requireSession_(body.sessionToken), payload);
         break;
