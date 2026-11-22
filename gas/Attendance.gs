@@ -170,3 +170,47 @@ function publicAttendance_(r) {
     status: r.status || ""
   };
 }
+
+/** Return persisted attendance history. Employees are restricted to their own records. */
+function listAttendanceHistory_(user, payload) {
+  const from = String(payload.from || "").trim();
+  const to = String(payload.to || "").trim();
+  const employeeId = String(payload.employee_id || "").trim();
+  if (from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
+  if (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
+  if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
+  const isAdmin = user.role === "admin";
+  const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
+    const date = attendanceDateKey_(r.tanggal);
+    if (!isAdmin && String(r.employee_id) !== String(user.employee_id)) return false;
+    if (isAdmin && employeeId && String(r.employee_id) !== employeeId) return false;
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    return true;
+  });
+  rows.sort(function(a, b) {
+    const da = attendanceDateKey_(a.tanggal) + " " + String(a.jam_masuk || a.created_at || "");
+    const db = attendanceDateKey_(b.tanggal) + " " + String(b.jam_masuk || b.created_at || "");
+    return db.localeCompare(da);
+  });
+  const total = rows.length;
+  const limit = Math.min(200, Math.max(1, Number(payload.limit) || 100));
+  const offset = Math.max(0, Number(payload.offset) || 0);
+  return {
+    total: total,
+    limit: limit,
+    offset: offset,
+    records: rows.slice(offset, offset + limit).map(function(r) {
+      return {
+        attendance_id: String(r.attendance_id || ""),
+        employee_id: String(r.employee_id || ""),
+        nama: String(r.nama || ""),
+        nik: String(r.nik || ""),
+        tanggal: attendanceDateKey_(r.tanggal),
+        jam_masuk: r.jam_masuk || "",
+        jam_pulang: r.jam_pulang || "",
+        status: String(r.status || "")
+      };
+    })
+  };
+}
