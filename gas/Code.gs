@@ -359,7 +359,7 @@ function getAdminDashboard_(admin) {
     activeEmployees: active.length,
     inactiveEmployees: employees.length - active.length,
     presentToday: Object.keys(attendedIds).length,
-    absentToday: Math.max(0, active.length - Object.keys(attendedIds).length),
+    notCheckedInToday: Math.max(0, active.length - Object.keys(attendedIds).length),
     checkInsToday: todayRows.length,
     week: week,
     latest: latest
