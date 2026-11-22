@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 const MAX_BODY = 2 * 1024 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
-  "ping", "initialize", "auth.login", "auth.me", "auth.logout",
+  "ping", "auth.login", "auth.me", "auth.logout",
   "employees.list", "employees.create", "employees.setStatus",
   "attendance.today", "attendance.checkIn", "attendance.checkOut",
   "settings.office.update"
@@ -35,12 +35,23 @@ export async function POST(request: NextRequest) {
       cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(30000)
     });
     const raw = await upstream.text();
-    let data: Record<string,any>;
-    try { data = JSON.parse(raw); } catch { return NextResponse.json({ok:false,error:"Respons GAS bukan JSON valid."},{status:502}); }
+    let data: Record<string,unknown>;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid response shape");
+      data = parsed as Record<string,unknown>;
+    } catch { return NextResponse.json({ok:false,error:"Respons GAS bukan JSON valid."},{status:502}); }
     if (!upstream.ok) return NextResponse.json({ok:false,error:"GAS gagal memproses permintaan."},{status:502});
 
-    const sessionToken = action === "auth.login" && data.ok ? data.data?.sessionToken : undefined;
-    if (sessionToken) delete data.data.sessionToken;
+    let sessionToken: string | undefined;
+    const responseData = data.data;
+    if (action === "auth.login" && data.ok === true && responseData && typeof responseData === "object" && !Array.isArray(responseData)) {
+      const loginData = responseData as Record<string,unknown>;
+      if (typeof loginData.sessionToken === "string") {
+        sessionToken = loginData.sessionToken;
+        delete loginData.sessionToken;
+      }
+    }
     const response = NextResponse.json(data,{status:data.ok === false ? 400 : 200});
     response.headers.set("Cache-Control","no-store");
     if (sessionToken) response.cookies.set(SESSION_COOKIE,String(sessionToken),{

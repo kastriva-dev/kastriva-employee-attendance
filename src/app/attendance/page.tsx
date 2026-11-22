@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback,useEffect,useRef,useState} from "react";
+import Link from "next/link";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
@@ -73,8 +74,6 @@ export default function AttendancePage(){
   useEffect(()=>{
     if(!cameraOpen)return;
     let cancelled=false;
-    setCameraReady(false);
-    setCameraError("");
     const start=async()=>{
       try{
         if(!navigator.mediaDevices?.getUserMedia)throw new Error("Browser tidak mendukung kamera. Gunakan Chrome atau browser terbaru melalui HTTPS.");
@@ -121,10 +120,16 @@ export default function AttendancePage(){
       const p=await getPosition();
       if(p.accuracy>200)throw new Error("Akurasi GPS "+Math.round(p.accuracy)+" meter. Maksimal 200 meter; coba di area terbuka.");
       setGeo(p);
-      setCameraOpen(true);
+        openCamera();
     }catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi GPS.");setPendingAction(null);}
     finally{setBusy(false);}
   }
+
+    function openCamera(){
+      setCameraReady(false);
+      setCameraError("");
+      setCameraOpen(true);
+    }
 
   function capturePhoto(){
     const video=videoRef.current;
@@ -178,7 +183,7 @@ export default function AttendancePage(){
   }
 
   if(checking)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
-  if(!user)return <main className="auth-shell"><div className="auth-card">Sesi tidak ditemukan. <a href="/">Kembali ke login</a></div></main>;
+    if(!user)return <main className="auth-shell"><div className="auth-card">Sesi tidak ditemukan. <Link href="/">Kembali ke login</Link></div></main>;
 
   const checkedIn=Boolean(record?.jam_masuk);
   const checkedOut=Boolean(record?.jam_pulang);
@@ -188,14 +193,14 @@ export default function AttendancePage(){
     <aside className="workspace-side">
       <div className="auth-brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
       <div className="side-caption">WORKSPACE</div>
-      <a className="side-link" href="/">▦　Ringkasan</a>
+        <Link className="side-link" href="/">▦　Ringkasan</Link>
       <div className="side-link active">◎　Absensi GPS</div>
       <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{user.role==="admin"?"Administrator":"Karyawan"}</small></span></div>
     </aside>
     <section className="workspace-main">
       <header className="workspace-header"><div><small>WORKSPACE / ATTENDANCE</small><h1>Absensi GPS & Selfie</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
       <div className="attendance-wrap">
-        <a className="attendance-back" href="/">← Kembali ke dashboard</a>
+          <Link className="attendance-back" href="/">← Kembali ke dashboard</Link>
         <section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Hadir dengan bukti<br/><em>lokasi dan selfie.</em></h2><p>Absensi hanya diterima jika perangkat berada dalam radius kantor dan foto diambil langsung melalui kamera.</p></div><div className="welcome-mark">GPS</div></section>
         <section className="attendance-card">
           <div className="section-heading"><div><small>KEHADIRAN HARI INI</small><h2>{record?.tanggal||new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"})}</h2></div><button className="refresh" onClick={()=>refresh()} disabled={busy}>Perbarui ↻</button></div>
@@ -211,7 +216,7 @@ export default function AttendancePage(){
             <button onClick={()=>beginAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk + Selfie"}</button>
             <button onClick={()=>beginAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang + Selfie"}</button>
           </div>
-          {photoDataUrl&&<div className="selfie-review"><p>Periksa foto sebelum dikirim. Foto ini diambil langsung dari kamera perangkat.</p><img src={photoDataUrl} alt="Pratinjau selfie absensi"/><div className="attendance-actions"><button className="secondary" onClick={()=>{setPhotoDataUrl("");setCameraOpen(true);}} disabled={busy}>Ambil ulang</button><button onClick={sendAttendance} disabled={busy}>{busy?"Mengirim...":"Konfirmasi & Kirim "+actionLabel}</button></div></div>}
+          {photoDataUrl&&<div className="selfie-review"><p>Periksa foto sebelum dikirim. Foto ini diambil langsung dari kamera perangkat.</p><img src={photoDataUrl} alt="Pratinjau selfie absensi"/><div className="attendance-actions"><button className="secondary" onClick={()=>{setPhotoDataUrl("");openCamera();}} disabled={busy}>Ambil ulang</button><button onClick={sendAttendance} disabled={busy}>{busy?"Mengirim...":"Konfirmasi & Kirim "+actionLabel}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
           {error&&<p className="attendance-error">{error}</p>}
           {notice&&<p className="attendance-success">{notice}</p>}

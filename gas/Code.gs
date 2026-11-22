@@ -7,6 +7,8 @@
 const APP_NAME = "Kastriva Employee Attendance";
 const SHEET_NAMES = ["Employees", "Attendance", "Settings", "Logs", "Sessions"];
 const SESSION_HOURS = 12;
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_SECONDS = 15 * 60;
 
 function doPost(e) {
   try {
@@ -20,9 +22,6 @@ function doPost(e) {
     switch (String(body.action || "")) {
       case "ping":
         data = { service: APP_NAME, status: "online" };
-        break;
-      case "initialize":
-        data = setupSystem();
         break;
       case "auth.login":
         data = login_(payload);
@@ -126,12 +125,14 @@ function login_(payload) {
   const nik = String(payload.nik || "").trim();
   const pin = String(payload.pin || "").trim();
   if (!nik || !/^\d{6,12}$/.test(pin)) throw new Error("NIK atau PIN tidak valid.");
+  reserveLoginAttempt_(nik);
   const sh = sheet_("Employees");
   const rows = readObjects_(sh);
   const user = rows.find(function(r) { return String(r.nik) === nik; });
   if (!user || String(user.status).toUpperCase() !== "ACTIVE") throw new Error("NIK/PIN salah atau akun tidak aktif.");
   const expected = hashPin_(pin, String(user.pin_salt || ""));
   if (!constantTimeEquals_(expected, String(user.pin_hash || ""))) throw new Error("NIK/PIN salah atau akun tidak aktif.");
+  clearLoginAttempts_(nik);
   const token = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
   const now = new Date();
   const expires = new Date(now.getTime() + SESSION_HOURS * 60 * 60 * 1000);
@@ -141,6 +142,34 @@ function login_(payload) {
   sh.getRange(user._row, header.last_login).setValue(now);
   log_("auth.login", nik, "Login successful");
   return { sessionToken: token, expiresAt: expires.toISOString(), user: publicUser_(user) };
+}
+
+/** Apply a short, per-NIK login throttle. Cache data is temporary and best-effort. */
+function reserveLoginAttempt_(nik) {
+  const key = "login_attempts_" + sha256_(String(nik));
+  const cache = CacheService.getScriptCache();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const attempts = Number(cache.get(key) || 0);
+    if (attempts >= LOGIN_MAX_ATTEMPTS) {
+      throw new Error("Terlalu banyak percobaan login. Coba lagi dalam 15 menit.");
+    }
+    cache.put(key, String(attempts + 1), LOGIN_WINDOW_SECONDS);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearLoginAttempts_(nik) {
+  const key = "login_attempts_" + sha256_(String(nik));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    CacheService.getScriptCache().remove(key);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function requireSession_(token) {
