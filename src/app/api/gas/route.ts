@@ -9,6 +9,7 @@ const ALLOWED_ACTIONS = [
   "ping", "auth.login", "auth.me", "auth.logout",
   "employees.list", "employees.create", "employees.setStatus", "dashboard.summary",
   "attendance.today", "attendance.list", "attendance.checkIn", "attendance.checkOut",
+  "leaves.list", "leaves.create", "leaves.review",
   "settings.office.update"
 ];
 
