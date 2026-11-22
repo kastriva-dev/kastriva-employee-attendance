@@ -1,10 +1,11 @@
 /**
- * GPS attendance and office geofence module.
+ * GPS attendance and mandatory camera-selfie upload module.
  * Depends on shared helpers in Code.gs.
  */
 const ATTENDANCE_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_OFFICE_RADIUS_METERS = 100;
 const MAX_GPS_ACCURACY_METERS = 200;
+const MAX_SELFIE_DATA_URL_CHARS = 1400000;
 
 function officeSettings_() {
   const rows = readObjects_(sheet_("Settings"));
@@ -60,6 +61,7 @@ function getTodayAttendance_(user) {
 function checkIn_(user, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let photoId = "";
   try {
     const location = validateOfficeLocation_(payload);
     const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
@@ -70,16 +72,22 @@ function checkIn_(user, payload) {
     });
     if (existing) throw new Error("Absensi masuk hari ini sudah tercatat.");
     const now = new Date();
+    photoId = saveAttendancePhoto_(user, payload, "MASUK", now);
     const item = {
       attendance_id: "ATT-" + Utilities.getUuid().slice(0, 8).toUpperCase(),
       employee_id: user.employee_id, nik: user.nik, nama: user.nama,
-      tanggal: today, jam_masuk: now, foto_masuk: "",
+      tanggal: today, jam_masuk: now, foto_masuk: photoId,
       lat_masuk: location.latitude, lng_masuk: location.longitude,
       accuracy_masuk: location.accuracy, status: "HADIR", created_at: now
     };
-    appendObject_(sh, item);
-    log_("attendance.check_in", user.nik, "GPS check-in accepted; distance " + Math.round(location.distance) + "m");
-    return { saved: true, record: publicAttendance_(item), distanceMeters: Math.round(location.distance) };
+    try {
+      appendObject_(sh, item);
+    } catch (writeError) {
+      trashAttendancePhoto_(photoId);
+      throw writeError;
+    }
+    log_("attendance.check_in", user.nik, "Selfie and GPS check-in accepted; distance " + Math.round(location.distance) + "m");
+    return { saved: true, record: publicAttendance_(item), distanceMeters: Math.round(location.distance), photoSaved: true };
   } finally {
     lock.releaseLock();
   }
@@ -88,6 +96,7 @@ function checkIn_(user, payload) {
 function checkOut_(user, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let photoId = "";
   try {
     const location = validateOfficeLocation_(payload);
     const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
@@ -98,22 +107,60 @@ function checkOut_(user, payload) {
     });
     if (!existing || !existing.jam_masuk) throw new Error("Belum ada absensi masuk hari ini.");
     if (existing.jam_pulang) throw new Error("Absensi pulang hari ini sudah tercatat.");
-    const now = new Date();
     const map = headerMap_(sh);
-    sh.getRange(existing._row, map.jam_pulang).setValue(now);
-    sh.getRange(existing._row, map.lat_pulang).setValue(location.latitude);
-    sh.getRange(existing._row, map.lng_pulang).setValue(location.longitude);
-    sh.getRange(existing._row, map.accuracy_pulang).setValue(location.accuracy);
-    sh.getRange(existing._row, map.status).setValue("HADIR");
+    if (!map.foto_pulang) throw new Error("Kolom foto_pulang belum tersedia. Pastikan struktur sheet Attendance sudah diperbarui.");
+    const now = new Date();
+    photoId = saveAttendancePhoto_(user, payload, "PULANG", now);
+    try {
+      sh.getRange(existing._row, map.jam_pulang).setValue(now);
+      sh.getRange(existing._row, map.foto_pulang).setValue(photoId);
+      sh.getRange(existing._row, map.lat_pulang).setValue(location.latitude);
+      sh.getRange(existing._row, map.lng_pulang).setValue(location.longitude);
+      sh.getRange(existing._row, map.accuracy_pulang).setValue(location.accuracy);
+      sh.getRange(existing._row, map.status).setValue("HADIR");
+    } catch (writeError) {
+      trashAttendancePhoto_(photoId);
+      throw writeError;
+    }
     existing.jam_pulang = now;
-    existing.lat_pulang = location.latitude;
-    existing.lng_pulang = location.longitude;
-    existing.accuracy_pulang = location.accuracy;
-    log_("attendance.check_out", user.nik, "GPS check-out accepted; distance " + Math.round(location.distance) + "m");
-    return { saved: true, record: publicAttendance_(existing), distanceMeters: Math.round(location.distance) };
+    log_("attendance.check_out", user.nik, "Selfie and GPS check-out accepted; distance " + Math.round(location.distance) + "m");
+    return { saved: true, record: publicAttendance_(existing), distanceMeters: Math.round(location.distance), photoSaved: true };
   } finally {
     lock.releaseLock();
   }
+}
+
+function saveAttendancePhoto_(user, payload, eventType, now) {
+  const dataUrl = String(payload.imageDataUrl || "");
+  if (!dataUrl || dataUrl.length > MAX_SELFIE_DATA_URL_CHARS) {
+    throw new Error("Selfie wajib diambil melalui kamera dan ukuran foto terlalu besar atau kosong.");
+  }
+  const match = dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error("Format selfie tidak valid. Ambil foto ulang melalui kamera.");
+  const bytes = Utilities.base64Decode(match[1]);
+  if (!bytes.length || bytes.length > 1000000) throw new Error("Ukuran selfie maksimal 1 MB. Ambil foto ulang.");
+  const props = PropertiesService.getScriptProperties();
+  let folder;
+  const folderId = props.getProperty("ATTENDANCE_PHOTO_FOLDER_ID");
+  if (folderId) {
+    try { folder = DriveApp.getFolderById(folderId); } catch (e) { folder = null; }
+  }
+  if (!folder) {
+    folder = DriveApp.createFolder("Kastriva Employee Attendance - Selfie");
+    props.setProperty("ATTENDANCE_PHOTO_FOLDER_ID", folder.getId());
+  }
+  const dateKey = Utilities.formatDate(now, ATTENDANCE_TIMEZONE, "yyyyMMdd_HHmmss");
+  const safeNik = String(user.nik || "").replace(/[^0-9]/g, "");
+  const fileName = eventType + "_" + safeNik + "_" + dateKey + "_" + Utilities.getUuid().slice(0, 8) + ".jpg";
+  const blob = Utilities.newBlob(bytes, "image/jpeg", fileName);
+  const file = folder.createFile(blob);
+  file.setDescription("Bukti selfie absensi " + eventType + " | " + String(user.nama || "") + " | " + dateKey);
+  return file.getId();
+}
+
+function trashAttendancePhoto_(fileId) {
+  if (!fileId) return;
+  try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { console.warn("Unable to clean orphan selfie: " + e); }
 }
 
 function validateOfficeLocation_(payload) {

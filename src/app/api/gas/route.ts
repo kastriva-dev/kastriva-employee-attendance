@@ -3,7 +3,7 @@ import {NextRequest,NextResponse} from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY = 256 * 1024;
+const MAX_BODY = 2 * 1024 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "initialize", "auth.login", "auth.me", "auth.logout",
@@ -23,13 +23,16 @@ export async function POST(request: NextRequest) {
   try { input = await request.json(); } catch { return NextResponse.json({ok:false,error:"Body JSON tidak valid."},{status:400}); }
   const action = String(input.action || "");
   if (!ALLOWED_ACTIONS.includes(action)) return NextResponse.json({ok:false,error:"Action tidak dikenal."},{status:400});
+  if ((action === "attendance.checkIn" || action === "attendance.checkOut") && String(input.payload?.imageDataUrl || "").length > 1400000) {
+    return NextResponse.json({ok:false,error:"Ukuran foto terlalu besar. Ambil ulang foto dengan kamera."},{status:413});
+  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value || "";
   try {
     const upstream = await fetch(url,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({action,payload:input.payload || {},secret,sessionToken:token}),
-      cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(20000)
+      cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(30000)
     });
     const raw = await upstream.text();
     let data: Record<string,any>;

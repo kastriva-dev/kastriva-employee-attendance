@@ -1,11 +1,12 @@
 "use client";
 
-import {useCallback,useEffect,useState} from "react";
+import {useCallback,useEffect,useRef,useState} from "react";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
 type Office={configured:boolean;latitude:number|null;longitude:number|null;radiusMeters:number};
 type Geo={latitude:number;longitude:number;accuracy:number};
+type AttendanceAction="attendance.checkIn"|"attendance.checkOut";
 
 async function api(action:string,payload:Record<string,unknown>={}) {
   const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
@@ -31,6 +32,10 @@ function timeLabel(value:string|Date|null|undefined){
   return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString("id-ID",{timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 
+function localStamp(){
+  return new Intl.DateTimeFormat("id-ID",{timeZone:"Asia/Jakarta",dateStyle:"medium",timeStyle:"medium"}).format(new Date());
+}
+
 export default function AttendancePage(){
   const [user,setUser]=useState<User|null>(null);
   const [record,setRecord]=useState<Attendance|null>(null);
@@ -43,6 +48,13 @@ export default function AttendancePage(){
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [geo,setGeo]=useState<Geo|null>(null);
+  const [cameraOpen,setCameraOpen]=useState(false);
+  const [cameraReady,setCameraReady]=useState(false);
+  const [cameraError,setCameraError]=useState("");
+  const [photoDataUrl,setPhotoDataUrl]=useState("");
+  const [pendingAction,setPendingAction]=useState<AttendanceAction|null>(null);
+  const videoRef=useRef<HTMLVideoElement|null>(null);
+  const streamRef=useRef<MediaStream|null>(null);
 
   const refresh=useCallback(async()=>{
     const d=await api("attendance.today");
@@ -57,6 +69,33 @@ export default function AttendancePage(){
       .catch(()=>{window.location.href="/";})
       .finally(()=>setChecking(false));
   },[refresh]);
+
+  useEffect(()=>{
+    if(!cameraOpen)return;
+    let cancelled=false;
+    setCameraReady(false);
+    setCameraError("");
+    const start=async()=>{
+      try{
+        if(!navigator.mediaDevices?.getUserMedia)throw new Error("Browser tidak mendukung kamera. Gunakan Chrome atau browser terbaru melalui HTTPS.");
+        const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"user"},width:{ideal:720},height:{ideal:540}}});
+        if(cancelled){stream.getTracks().forEach(track=>track.stop());return;}
+        streamRef.current=stream;
+        if(videoRef.current){
+          videoRef.current.srcObject=stream;
+          await videoRef.current.play();
+          if(!cancelled)setCameraReady(true);
+        }
+      }catch(e){
+        if(!cancelled)setCameraError(e instanceof Error?e.message:"Tidak dapat membuka kamera. Periksa izin kamera browser.");
+      }
+    };
+    void start();
+    return ()=>{
+      cancelled=true;
+      if(streamRef.current){streamRef.current.getTracks().forEach(track=>track.stop());streamRef.current=null;}
+    };
+  },[cameraOpen]);
 
   async function locate(){
     setBusy(true);setError("");setNotice("");
@@ -76,15 +115,61 @@ export default function AttendancePage(){
     finally{setBusy(false);}
   }
 
-  async function submitAttendance(action:"attendance.checkIn"|"attendance.checkOut"){
+  async function beginAttendance(action:AttendanceAction){
+    setBusy(true);setError("");setNotice("");setPhotoDataUrl("");setPendingAction(action);
+    try{
+      const p=await getPosition();
+      if(p.accuracy>200)throw new Error("Akurasi GPS "+Math.round(p.accuracy)+" meter. Maksimal 200 meter; coba di area terbuka.");
+      setGeo(p);
+      setCameraOpen(true);
+    }catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi GPS.");setPendingAction(null);}
+    finally{setBusy(false);}
+  }
+
+  function capturePhoto(){
+    const video=videoRef.current;
+    if(!video||!cameraReady||!geo||!user){setCameraError("Kamera atau data lokasi belum siap.");return;}
+    const sourceWidth=video.videoWidth;
+    const sourceHeight=video.videoHeight;
+    if(!sourceWidth||!sourceHeight){setCameraError("Tunggu sampai gambar kamera tampil, lalu ambil foto kembali.");return;}
+    const scale=Math.min(1,720/sourceWidth);
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.round(sourceWidth*scale);
+    canvas.height=Math.round(sourceHeight*scale);
+    const ctx=canvas.getContext("2d");
+    if(!ctx){setCameraError("Tidak dapat memproses foto pada perangkat ini.");return;}
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const bandHeight=Math.min(112,Math.max(94,canvas.height*.24));
+    ctx.fillStyle="rgba(10,25,42,0.82)";
+    ctx.fillRect(0,canvas.height-bandHeight,canvas.width,bandHeight);
+    ctx.fillStyle="#ffffff";
+    ctx.font="bold 16px Arial";
+    ctx.fillText("KASTRIVA • BUKTI ABSENSI",14,canvas.height-bandHeight+23);
+    ctx.font="14px Arial";
+    ctx.fillText(user.nama+"  |  NIK: "+user.nik,14,canvas.height-bandHeight+46);
+    ctx.fillText(localStamp(),14,canvas.height-bandHeight+68);
+    ctx.font="12px Arial";
+    ctx.fillText("GPS: "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+"  ±"+Math.round(geo.accuracy)+"m",14,canvas.height-bandHeight+88);
+    setPhotoDataUrl(canvas.toDataURL("image/jpeg",0.72));
+    setCameraOpen(false);
+    setCameraError("");
+  }
+
+  async function sendAttendance(){
+    if(!pendingAction||!photoDataUrl||!geo){setError("Selfie dan lokasi GPS wajib tersedia sebelum absensi dikirim.");return;}
     setBusy(true);setError("");setNotice("");
     try{
-      const p=await getPosition();setGeo(p);
-      const d=await api(action,p);
+      const d=await api(pendingAction,{...geo,imageDataUrl:photoDataUrl});
       setRecord(d.record||null);
-      setNotice((action==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
+      setNotice((pendingAction==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat dengan selfie dan GPS. Jarak dari kantor: "+d.distanceMeters+" meter.");
+      setPhotoDataUrl("");setPendingAction(null);
+      await refresh();
     }catch(e){setError(e instanceof Error?e.message:"Absensi gagal.");}
     finally{setBusy(false);}
+  }
+
+  function cancelCapture(){
+    setCameraOpen(false);setPhotoDataUrl("");setPendingAction(null);setCameraError("");
   }
 
   async function logout(){
@@ -97,6 +182,7 @@ export default function AttendancePage(){
 
   const checkedIn=Boolean(record?.jam_masuk);
   const checkedOut=Boolean(record?.jam_pulang);
+  const actionLabel=pendingAction==="attendance.checkIn"?"Absen Masuk":"Absen Pulang";
 
   return <main className="workspace">
     <aside className="workspace-side">
@@ -107,10 +193,10 @@ export default function AttendancePage(){
       <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{user.role==="admin"?"Administrator":"Karyawan"}</small></span></div>
     </aside>
     <section className="workspace-main">
-      <header className="workspace-header"><div><small>WORKSPACE / ATTENDANCE</small><h1>Absensi GPS</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
+      <header className="workspace-header"><div><small>WORKSPACE / ATTENDANCE</small><h1>Absensi GPS & Selfie</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
       <div className="attendance-wrap">
         <a className="attendance-back" href="/">← Kembali ke dashboard</a>
-        <section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Catat kehadiran<br/><em>dengan lokasi GPS.</em></h2><p>Absensi hanya diterima jika perangkat berada dalam radius kantor yang ditentukan administrator.</p></div><div className="welcome-mark">GPS</div></section>
+        <section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Hadir dengan bukti<br/><em>lokasi dan selfie.</em></h2><p>Absensi hanya diterima jika perangkat berada dalam radius kantor dan foto diambil langsung melalui kamera.</p></div><div className="welcome-mark">GPS</div></section>
         <section className="attendance-card">
           <div className="section-heading"><div><small>KEHADIRAN HARI INI</small><h2>{record?.tanggal||new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"})}</h2></div><button className="refresh" onClick={()=>refresh()} disabled={busy}>Perbarui ↻</button></div>
           <div className="attendance-status">
@@ -118,17 +204,25 @@ export default function AttendancePage(){
             <div className="attendance-chip">Pulang: <b>{timeLabel(record?.jam_pulang)}</b></div>
             <div className="attendance-chip">Status: <b>{record?.status||"Belum absen"}</b></div>
           </div>
-          <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
+          <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter. Selfie kamera wajib.</p>
           {geo&&<p className="attendance-muted">Lokasi perangkat: {geo.latitude.toFixed(6)}, {geo.longitude.toFixed(6)} · akurasi ±{Math.round(geo.accuracy)} m</p>}
           <div className="attendance-actions">
             <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
-            <button onClick={()=>submitAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk"}</button>
-            <button onClick={()=>submitAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang"}</button>
+            <button onClick={()=>beginAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk + Selfie"}</button>
+            <button onClick={()=>beginAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang + Selfie"}</button>
           </div>
+          {photoDataUrl&&<div className="selfie-review"><p>Periksa foto sebelum dikirim. Foto ini diambil langsung dari kamera perangkat.</p><img src={photoDataUrl} alt="Pratinjau selfie absensi"/><div className="attendance-actions"><button className="secondary" onClick={()=>{setPhotoDataUrl("");setCameraOpen(true);}} disabled={busy}>Ambil ulang</button><button onClick={sendAttendance} disabled={busy}>{busy?"Mengirim...":"Konfirmasi & Kirim "+actionLabel}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
           {error&&<p className="attendance-error">{error}</p>}
           {notice&&<p className="attendance-success">{notice}</p>}
         </section>
+        {cameraOpen&&<section className="attendance-card camera-card">
+          <div className="section-heading"><div><small>VERIFIKASI WAJIB</small><h2>Ambil selfie {actionLabel}</h2></div><span>Kamera langsung</span></div>
+          <p className="attendance-muted">Posisikan wajah di dalam bingkai. Tidak tersedia pilihan unggah atau galeri.</p>
+          {cameraError&&<p className="attendance-error">{cameraError}</p>}
+          <div className="camera-frame">{cameraReady?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-loading">{cameraError?"Kamera belum aktif":"Mengaktifkan kamera..."}</div>}</div>
+          <div className="attendance-actions"><button className="secondary" onClick={cancelCapture} disabled={busy}>Batal</button><button onClick={capturePhoto} disabled={!cameraReady||busy}>Ambil Foto Selfie</button></div>
+        </section>}
         {user.role==="admin"&&<section className="attendance-card">
           <div className="section-heading"><div><small>ADMINISTRATOR</small><h2>Pengaturan lokasi kantor</h2></div><span>{office?.configured?"Sudah dikonfigurasi":"Belum diatur"}</span></div>
           <p className="attendance-muted">Berdirilah di titik kantor yang akan dijadikan pusat geofence, lalu ambil lokasi GPS. Atur radius antara 30–1.000 meter.</p>
@@ -140,7 +234,7 @@ export default function AttendancePage(){
           </form>
           {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}
         </section>}
-        <p className="attendance-muted">Catatan: tahap ini mencatat waktu dan koordinat GPS. Fitur selfie kamera akan ditambahkan pada tahap berikutnya.</p>
+        <p className="attendance-muted">Foto selfie disimpan secara privat di Google Drive. Jangan menutup halaman saat proses pengiriman berlangsung.</p>
       </div>
     </section>
   </main>;
