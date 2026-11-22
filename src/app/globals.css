@@ -29,3 +29,18 @@
 .attendance-success{background:#eaf8f1;color:#16845b;border-radius:9px;padding:11px;font-size:12px;margin-top:12px}
 .attendance-time{font:800 24px Manrope;color:#173653;margin:6px 0}
 @media(max-width:800px){.attendance-wrap{padding:20px}.attendance-form{grid-template-columns:1fr}}
+
+
+.live-summary{background:#fff;border:1px solid #e5ebf2;border-radius:16px;padding:22px;margin:20px 0}
+.live-summary-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:18px}
+.live-summary-head small,.live-summary-grid small{font-size:9px;font-weight:800;letter-spacing:1.3px;color:#91a0b2}
+.live-summary-head h2{font-size:17px;margin:6px 0}.live-summary-head p{font-size:11px;color:#8b98a7;margin:0}
+.live-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.live-summary-grid article{border:1px solid #eaf0f5;background:#f9fbfd;border-radius:12px;padding:15px;display:grid;gap:7px}
+.live-summary-grid strong{font:800 27px Manrope;color:#173653}.live-summary-grid article span{font-size:10px;color:#8b98a7}
+.live-recent{margin-top:22px}.live-recent .section-heading a{font-size:11px;color:#246094;text-decoration:none;font-weight:700}
+.live-table-wrap{overflow-x:auto}.live-table{width:100%;border-collapse:collapse;font-size:11px}.live-table th{text-align:left;color:#8795a5;font-size:9px;letter-spacing:.6px;padding:11px;border-bottom:1px solid #e9eef3}.live-table td{padding:13px 11px;border-bottom:1px solid #f0f3f6;color:#526579;white-space:nowrap}.live-table td:first-child{font-weight:700;color:#173653}
+.live-empty{font-size:12px;color:#8998a8;background:#f8fafc;padding:18px;border-radius:10px}
+.welcome-mark img{width:145px;height:145px;object-fit:contain;opacity:.92}
+@media(max-width:800px){.live-summary-grid{grid-template-columns:1fr 1fr}.live-summary-head{align-items:flex-start}.live-summary{padding:16px}}
+@media(max-width:480px){.live-summary-head{flex-direction:column}.live-summary-head .refresh{width:100%}.live-summary-grid{gap:8px}.live-summary-grid article{padding:12px}.live-summary-grid strong{font-size:23px}}
