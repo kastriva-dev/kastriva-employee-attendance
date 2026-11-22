@@ -117,7 +117,7 @@ export default function AttendancePage(){
       ctx.fillText(stamp+" WIB",16,canvas.height-h+size*2.5);
       ctx.fillText("GPS "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+" • ±"+Math.round(geo.accuracy)+" m",16,canvas.height-h+size*3.7);
       const data=canvas.toDataURL("image/jpeg",0.68);
-      if(data.length>245000)throw new Error("Ukuran foto masih terlalu besar. Ambil ulang dengan resolusi kamera lebih rendah.");
+      if(data.length>235000)throw new Error("Ukuran foto masih terlalu besar. Ambil ulang dengan resolusi kamera lebih rendah.");
       setPhotoData(data);setPhotoPreview(data);setNotice("Selfie siap. Periksa foto, lalu kirim absensi.");
     }catch(e){setError(e instanceof Error?e.message:"Gagal memproses selfie.");}
     finally{setBusy(false);}
