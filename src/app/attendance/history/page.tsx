@@ -113,7 +113,7 @@ export default function AttendanceHistoryPage(){
           {error&&<p className="auth-error">{error}</p>}
           <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th>{!isAdmin&&<><th>Jam masuk</th><th>Jam pulang</th></>}<th>Status</th>{isAdmin&&<><th>Foto masuk · waktu</th><th>Foto pulang · waktu</th></>}</tr></thead><tbody>
             {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td>{!isAdmin&&<><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td></>}<td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
-            {!busy&&!records.length&&<tr><td colSpan={isAdmin?8:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
+            {!busy&&!records.length&&<tr><td colSpan={isAdmin?6:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
             {busy&&!records.length&&<tr><td colSpan={isAdmin?6:5}>Memuat data dari Google Sheets...</td></tr>}
           </tbody></table></div>
           <div className="section-heading" style={{marginTop:20}}><span>Menampilkan {records.length?offset+1:0}–{Math.min(offset+records.length,total)} dari {total}</span><div style={{display:"flex",gap:8}}><button className="refresh" disabled={busy||offset===0} onClick={()=>load(Math.max(0,offset-limit))}>← Sebelumnya</button><button className="refresh" disabled={busy||offset+limit>=total} onClick={()=>load(offset+limit)}>Berikutnya →</button></div></div>
