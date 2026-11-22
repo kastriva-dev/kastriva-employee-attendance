@@ -6,7 +6,7 @@ function saveAttendancePhoto_(dataUrl, user, phase, capturedAt, location) {
   const folderId = PropertiesService.getScriptProperties().getProperty("ATTENDANCE_PHOTO_FOLDER_ID");
   if (!folderId) throw new Error("Folder foto absensi belum dikonfigurasi administrator.");
   const value = String(dataUrl || "");
-  const match = value.match(/^data:image\\/(jpeg|jpg);base64,([A-Za-z0-9+/=]+)$/);
+  const match = value.match(/^data:image\/(jpeg|jpg);base64,([A-Za-z0-9+/=]+)$/);
   if (!match || match[2].length > 240000) throw new Error("Selfie wajib diambil dari kamera dan ukuran foto maksimal sekitar 180 KB.");
   const bytes = Utilities.base64Decode(match[2]);
   if (!bytes.length || bytes.length > 180 * 1024) throw new Error("Ukuran selfie terlalu besar. Ambil ulang dengan kualitas kamera lebih rendah.");
