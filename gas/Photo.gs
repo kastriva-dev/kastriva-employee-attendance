@@ -22,3 +22,51 @@ function saveAttendancePhoto_(dataUrl, user, phase, capturedAt, location) {
   // File remains private; only the Drive folder's authorized users can access it.
   return file.getId();
 }
+
+
+/**
+ * Admin-only photo retrieval. Drive IDs never leave the GAS backend.
+ * Photos older than the configured retention window cannot be previewed.
+ */
+function getAttendancePhoto_(admin, payload) {
+  if (!admin || admin.role !== "admin") throw new Error("Akses khusus administrator.");
+  const attendanceId = String(payload.attendance_id || "").trim();
+  const phase = String(payload.phase || "").toLowerCase();
+  if (!attendanceId || !["masuk", "pulang"].includes(phase)) throw new Error("Permintaan foto tidak valid.");
+
+  const sh = sheet_("Attendance");
+  const record = readObjects_(sh).find(function(r) {
+    return String(r.attendance_id || "") === attendanceId;
+  });
+  if (!record) throw new Error("Data absensi tidak ditemukan.");
+
+  const settings = readObjects_(sheet_("Settings"));
+  const retentionRow = settings.find(function(r) { return String(r.key) === "photo_retention_days"; });
+  const retentionDays = Math.max(1, Math.min(14, Number(retentionRow && retentionRow.value) || 14));
+  const dateKey = attendanceDateKey_(record.tanggal);
+  const parts = dateKey.split("-");
+  const recordDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  const ageDays = Math.floor((new Date(new Date().toDateString()).getTime() - recordDate.getTime()) / 86400000);
+  if (!Number.isFinite(ageDays) || ageDays < 0 || ageDays > retentionDays) {
+    throw new Error("Foto sudah melewati masa retensi " + retentionDays + " hari.");
+  }
+
+  const fileId = String(phase === "masuk" ? record.foto_masuk || "" : record.foto_pulang || "");
+  if (!fileId) throw new Error("Foto selfie " + phase + " belum tersedia.");
+  const file = DriveApp.getFileById(fileId);
+  const blob = file.getBlob();
+  const bytes = blob.getBytes();
+  if (!bytes.length || bytes.length > 180 * 1024) throw new Error("Ukuran foto tidak sesuai batas penyimpanan.");
+  const mime = blob.getContentType() || "image/jpeg";
+  if (!/^image\\/(jpeg|jpg|png|webp)$/i.test(mime)) throw new Error("Format bukti foto tidak didukung.");
+  return {
+    attendance_id: attendanceId,
+    phase: phase,
+    mimeType: mime,
+    dataUrl: "data:" + mime + ";base64," + Utilities.base64Encode(bytes),
+    nama: String(record.nama || ""),
+    nik: String(record.nik || ""),
+    tanggal: dateKey,
+    capturedAt: phase === "masuk" ? record.jam_masuk || "" : record.jam_pulang || ""
+  };
+}
