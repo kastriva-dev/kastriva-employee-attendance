@@ -37,11 +37,13 @@ function PhotoCell({record,phase,onPreview}:{record:RecordItem;phase:"masuk"|"pu
       .finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
   },[visible,record.attendance_id,phase]);
-  if(!(phase==="masuk"?record.jam_masuk:record.jam_pulang))return <span style={{color:"#94a3b8"}}>—</span>;
-  return <div id={"photo-cell-"+record.attendance_id+"-"+phase} style={{minWidth:62}}>
+  const recordedTime=phase==="masuk"?record.jam_masuk:record.jam_pulang;
+  if(!recordedTime)return <span style={{color:"#94a3b8"}}>—</span>;
+  return <div id={"photo-cell-"+record.attendance_id+"-"+phase} style={{minWidth:72,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:5}}>
     {data?<button type="button" onClick={()=>onPreview(data)} title={"Perbesar foto "+phase} style={{display:"block",padding:2,border:"1px solid #dbe4ee",borderRadius:8,background:"#fff",cursor:"zoom-in"}}>
-      <img src={data.dataUrl} alt={"Foto "+phase} loading="lazy" style={{display:"block",width:52,height:66,objectFit:"cover",borderRadius:5}}/>
-    </button>:<div style={{width:56,height:68,border:"1px solid #e2e8f0",borderRadius:8,display:"grid",placeItems:"center",background:"#f8fafc",fontSize:10,color:error?"#b45309":"#64748b",textAlign:"center",padding:3}}>{loading?"Memuat…":error?"Tidak tersedia":"Menunggu"}</div>}
+      <img src={data.dataUrl} alt={"Foto "+phase} loading="lazy" style={{display:"block",width:56,height:68,objectFit:"cover",borderRadius:5}}/>
+    </button>:<div style={{width:60,height:72,border:"1px solid #e2e8f0",borderRadius:8,display:"grid",placeItems:"center",background:"#f8fafc",fontSize:10,color:error?"#b45309":"#64748b",textAlign:"center",padding:3}}>{loading?"Memuat…":error?"Foto tidak ada":"Menunggu"}</div>}
+    <span style={{fontSize:11,fontWeight:600,color:"#334155",whiteSpace:"nowrap"}}>{timeLabel(recordedTime)} WIB</span>
   </div>;
 }
 function timeLabel(value:string|Date|null|undefined){
@@ -109,10 +111,10 @@ export default function AttendanceHistoryPage(){
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
           {error&&<p className="auth-error">{error}</p>}
-          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th><th>Jam masuk</th><th>Jam pulang</th><th>Status</th>{isAdmin&&<><th>Foto masuk</th><th>Foto pulang</th></>}</tr></thead><tbody>
-            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td><td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
+          <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th>{!isAdmin&&<><th>Jam masuk</th><th>Jam pulang</th></>}<th>Status</th>{isAdmin&&<><th>Foto masuk · waktu</th><th>Foto pulang · waktu</th></>}</tr></thead><tbody>
+            {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td>{!isAdmin&&<><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td></>}<td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
             {!busy&&!records.length&&<tr><td colSpan={isAdmin?8:5}>Belum ada catatan pada rentang tanggal ini.</td></tr>}
-            {busy&&!records.length&&<tr><td colSpan={isAdmin?7:5}>Memuat data dari Google Sheets...</td></tr>}
+            {busy&&!records.length&&<tr><td colSpan={isAdmin?6:5}>Memuat data dari Google Sheets...</td></tr>}
           </tbody></table></div>
           <div className="section-heading" style={{marginTop:20}}><span>Menampilkan {records.length?offset+1:0}–{Math.min(offset+records.length,total)} dari {total}</span><div style={{display:"flex",gap:8}}><button className="refresh" disabled={busy||offset===0} onClick={()=>load(Math.max(0,offset-limit))}>← Sebelumnya</button><button className="refresh" disabled={busy||offset+limit>=total} onClick={()=>load(offset+limit)}>Berikutnya →</button></div></div>
         </section>
