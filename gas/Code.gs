@@ -55,6 +55,9 @@ function doPost(e) {
       case "attendance.list":
         data = listAttendanceHistory_(requireSession_(body.sessionToken), payload);
         break;
+      case "attendance.photo":
+        data = getAttendancePhoto_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "leaves.list":
         data = listLeaveRequests_(requireSession_(body.sessionToken), payload);
         break;
