@@ -1,0 +1,144 @@
+"use client";
+
+import {useCallback,useEffect,useState} from "react";
+
+type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
+type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
+type Office={configured:boolean;latitude:number|null;longitude:number|null;radiusMeters:number};
+type Geo={latitude:number;longitude:number;accuracy:number};
+
+async function api(action:string,payload:Record<string,unknown>={}) {
+  const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
+  const result=await response.json();
+  if(!response.ok||!result.ok) throw new Error(result.error||"Permintaan gagal.");
+  return result.data;
+}
+
+function getPosition():Promise<Geo>{
+  return new Promise((resolve,reject)=>{
+    if(!("geolocation" in navigator)){reject(new Error("Browser tidak mendukung GPS."));return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}),
+      e=>reject(new Error(e.code===1?"Izin lokasi ditolak. Izinkan akses lokasi pada browser.":e.code===2?"Lokasi tidak dapat ditemukan. Aktifkan GPS lalu coba lagi.":"Waktu mengambil lokasi habis. Coba kembali."),
+      {enableHighAccuracy:true,timeout:20000,maximumAge:0}
+    );
+  });
+}
+
+function timeLabel(value:string|Date|null|undefined){
+  if(!value)return "—";
+  const d=new Date(value);
+  return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString("id-ID",{timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+
+export default function AttendancePage(){
+  const [user,setUser]=useState<User|null>(null);
+  const [record,setRecord]=useState<Attendance|null>(null);
+  const [office,setOffice]=useState<Office|null>(null);
+  const [radius,setRadius]=useState("100");
+  const [busy,setBusy]=useState(false);
+  const [checking,setChecking]=useState(true);
+  const [error,setError]=useState("");
+  const [notice,setNotice]=useState("");
+  const [geo,setGeo]=useState<Geo|null>(null);
+
+  const refresh=useCallback(async()=>{
+    const d=await api("attendance.today");
+    setRecord(d.record||null);
+    setOffice(d.office||null);
+    if(d.office?.radiusMeters)setRadius(String(d.office.radiusMeters));
+  },[]);
+
+  useEffect(()=>{
+    api("auth.me").then(async d=>{setUser(d.user);await refresh();})
+      .catch(()=>{window.location.href="/";})
+      .finally(()=>setChecking(false));
+  },[refresh]);
+
+  async function locate(){
+    setBusy(true);setError("");setNotice("");
+    try{const p=await getPosition();setGeo(p);setNotice("Lokasi berhasil diperoleh. Akurasi ±"+Math.round(p.accuracy)+" meter.");}
+    catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi.");}
+    finally{setBusy(false);}
+  }
+
+  async function saveOffice(e:React.FormEvent){
+    e.preventDefault();setBusy(true);setError("");setNotice("");
+    try{
+      const p=geo||await getPosition();
+      setGeo(p);
+      const d=await api("settings.office.update",{latitude:p.latitude,longitude:p.longitude,radiusMeters:Number(radius)});
+      setOffice(d.office);setNotice("Lokasi kantor dan radius geofence berhasil disimpan.");
+    }catch(e){setError(e instanceof Error?e.message:"Gagal menyimpan lokasi kantor.");}
+    finally{setBusy(false);}
+  }
+
+  async function submitAttendance(action:"attendance.checkIn"|"attendance.checkOut"){
+    setBusy(true);setError("");setNotice("");
+    try{
+      const p=await getPosition();setGeo(p);
+      const d=await api(action,p);
+      setRecord(d.record||null);
+      setNotice((action==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
+    }catch(e){setError(e instanceof Error?e.message:"Absensi gagal.");}
+    finally{setBusy(false);}
+  }
+
+  async function logout(){
+    setBusy(true);
+    try{await api("auth.logout");}finally{window.location.href="/";}
+  }
+
+  if(checking)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
+  if(!user)return <main className="auth-shell"><div className="auth-card">Sesi tidak ditemukan. <a href="/">Kembali ke login</a></div></main>;
+
+  const checkedIn=Boolean(record?.jam_masuk);
+  const checkedOut=Boolean(record?.jam_pulang);
+
+  return <main className="workspace">
+    <aside className="workspace-side">
+      <div className="auth-brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
+      <div className="side-caption">WORKSPACE</div>
+      <a className="side-link" href="/">▦　Ringkasan</a>
+      <div className="side-link active">◎　Absensi GPS</div>
+      <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{user.role==="admin"?"Administrator":"Karyawan"}</small></span></div>
+    </aside>
+    <section className="workspace-main">
+      <header className="workspace-header"><div><small>WORKSPACE / ATTENDANCE</small><h1>Absensi GPS</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
+      <div className="attendance-wrap">
+        <a className="attendance-back" href="/">← Kembali ke dashboard</a>
+        <section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Catat kehadiran<br/><em>dengan lokasi GPS.</em></h2><p>Absensi hanya diterima jika perangkat berada dalam radius kantor yang ditentukan administrator.</p></div><div className="welcome-mark">GPS</div></section>
+        <section className="attendance-card">
+          <div className="section-heading"><div><small>KEHADIRAN HARI INI</small><h2>{record?.tanggal||new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"})}</h2></div><button className="refresh" onClick={()=>refresh()} disabled={busy}>Perbarui ↻</button></div>
+          <div className="attendance-status">
+            <div className="attendance-chip">Masuk: <b>{timeLabel(record?.jam_masuk)}</b></div>
+            <div className="attendance-chip">Pulang: <b>{timeLabel(record?.jam_pulang)}</b></div>
+            <div className="attendance-chip">Status: <b>{record?.status||"Belum absen"}</b></div>
+          </div>
+          <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
+          {geo&&<p className="attendance-muted">Lokasi perangkat: {geo.latitude.toFixed(6)}, {geo.longitude.toFixed(6)} · akurasi ±{Math.round(geo.accuracy)} m</p>}
+          <div className="attendance-actions">
+            <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
+            <button onClick={()=>submitAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}>{busy?"Memproses...":"Absen Masuk"}</button>
+            <button onClick={()=>submitAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}>{busy?"Memproses...":"Absen Pulang"}</button>
+          </div>
+          {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
+          {error&&<p className="attendance-error">{error}</p>}
+          {notice&&<p className="attendance-success">{notice}</p>}
+        </section>
+        {user.role==="admin"&&<section className="attendance-card">
+          <div className="section-heading"><div><small>ADMINISTRATOR</small><h2>Pengaturan lokasi kantor</h2></div><span>{office?.configured?"Sudah dikonfigurasi":"Belum diatur"}</span></div>
+          <p className="attendance-muted">Berdirilah di titik kantor yang akan dijadikan pusat geofence, lalu ambil lokasi GPS. Atur radius antara 30–1.000 meter.</p>
+          <form className="attendance-form" onSubmit={saveOffice}>
+            <label>Latitude<input readOnly value={geo?.latitude.toFixed(7)??(office?.latitude??"")} placeholder="Ambil lokasi GPS"/></label>
+            <label>Longitude<input readOnly value={geo?.longitude.toFixed(7)??(office?.longitude??"")} placeholder="Ambil lokasi GPS"/></label>
+            <label>Radius kantor (meter)<input type="number" min="30" max="1000" step="1" value={radius} onChange={e=>setRadius(e.target.value)} required/></label>
+            <div className="attendance-actions"><button type="button" className="secondary" onClick={locate} disabled={busy}>Gunakan lokasi saya</button><button type="submit" disabled={busy||!geo}>{busy?"Menyimpan...":"Simpan lokasi kantor"}</button></div>
+          </form>
+          {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}
+        </section>}
+        <p className="attendance-muted">Catatan: tahap ini mencatat waktu dan koordinat GPS. Fitur selfie kamera akan ditambahkan pada tahap berikutnya.</p>
+      </div>
+    </section>
+  </main>;
+}
