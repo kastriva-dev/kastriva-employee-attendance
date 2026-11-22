@@ -36,6 +36,8 @@ export default function AttendancePage(){
   const [record,setRecord]=useState<Attendance|null>(null);
   const [office,setOffice]=useState<Office|null>(null);
   const [radius,setRadius]=useState("100");
+  const [officeLatitude,setOfficeLatitude]=useState("");
+  const [officeLongitude,setOfficeLongitude]=useState("");
   const [busy,setBusy]=useState(false);
   const [checking,setChecking]=useState(true);
   const [error,setError]=useState("");
@@ -47,6 +49,7 @@ export default function AttendancePage(){
     setRecord(d.record||null);
     setOffice(d.office||null);
     if(d.office?.radiusMeters)setRadius(String(d.office.radiusMeters));
+    if(d.office?.configured){setOfficeLatitude(String(d.office.latitude));setOfficeLongitude(String(d.office.longitude));}
   },[]);
 
   useEffect(()=>{
@@ -57,7 +60,7 @@ export default function AttendancePage(){
 
   async function locate(){
     setBusy(true);setError("");setNotice("");
-    try{const p=await getPosition();setGeo(p);setNotice("Lokasi berhasil diperoleh. Akurasi ±"+Math.round(p.accuracy)+" meter.");}
+    try{const p=await getPosition();setGeo(p);setOfficeLatitude(String(p.latitude));setOfficeLongitude(String(p.longitude));setNotice("Lokasi berhasil diperoleh. Akurasi ±"+Math.round(p.accuracy)+" meter.");}
     catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi.");}
     finally{setBusy(false);}
   }
@@ -65,9 +68,9 @@ export default function AttendancePage(){
   async function saveOffice(e:React.FormEvent){
     e.preventDefault();setBusy(true);setError("");setNotice("");
     try{
-      const p=geo||await getPosition();
-      setGeo(p);
-      const d=await api("settings.office.update",{latitude:p.latitude,longitude:p.longitude,radiusMeters:Number(radius)});
+      const latitude=Number(officeLatitude);const longitude=Number(officeLongitude);
+      if(!officeLatitude.trim()||!officeLongitude.trim()||!Number.isFinite(latitude)||!Number.isFinite(longitude))throw new Error("Isi koordinat latitude dan longitude kantor yang valid.");
+      const d=await api("settings.office.update",{latitude,longitude,radiusMeters:Number(radius)});
       setOffice(d.office);setNotice("Lokasi kantor dan radius geofence berhasil disimpan.");
     }catch(e){setError(e instanceof Error?e.message:"Gagal menyimpan lokasi kantor.");}
     finally{setBusy(false);}
@@ -130,10 +133,10 @@ export default function AttendancePage(){
           <div className="section-heading"><div><small>ADMINISTRATOR</small><h2>Pengaturan lokasi kantor</h2></div><span>{office?.configured?"Sudah dikonfigurasi":"Belum diatur"}</span></div>
           <p className="attendance-muted">Berdirilah di titik kantor yang akan dijadikan pusat geofence, lalu ambil lokasi GPS. Atur radius antara 30–1.000 meter.</p>
           <form className="attendance-form" onSubmit={saveOffice}>
-            <label>Latitude<input readOnly value={geo?.latitude.toFixed(7)??(office?.latitude??"")} placeholder="Ambil lokasi GPS"/></label>
-            <label>Longitude<input readOnly value={geo?.longitude.toFixed(7)??(office?.longitude??"")} placeholder="Ambil lokasi GPS"/></label>
+            <label>Latitude<input value={officeLatitude} onChange={e=>setOfficeLatitude(e.target.value)} inputMode="decimal" placeholder="Contoh: -6.200000"/></label>
+            <label>Longitude<input value={officeLongitude} onChange={e=>setOfficeLongitude(e.target.value)} inputMode="decimal" placeholder="Contoh: 106.816666"/></label>
             <label>Radius kantor (meter)<input type="number" min="30" max="1000" step="1" value={radius} onChange={e=>setRadius(e.target.value)} required/></label>
-            <div className="attendance-actions"><button type="button" className="secondary" onClick={locate} disabled={busy}>Gunakan lokasi saya</button><button type="submit" disabled={busy||!geo}>{busy?"Menyimpan...":"Simpan lokasi kantor"}</button></div>
+            <div className="attendance-actions"><button type="button" className="secondary" onClick={locate} disabled={busy}>Gunakan lokasi saya</button><button type="submit" disabled={busy||!officeLatitude.trim()||!officeLongitude.trim()}>{busy?"Menyimpan...":"Simpan lokasi kantor"}</button></div>
           </form>
           {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}
         </section>}
