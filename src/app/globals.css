@@ -44,3 +44,28 @@
 .welcome-mark img{width:145px;height:145px;object-fit:contain;opacity:.92}
 @media(max-width:800px){.live-summary-grid{grid-template-columns:1fr 1fr}.live-summary-head{align-items:flex-start}.live-summary{padding:16px}}
 @media(max-width:480px){.live-summary-head{flex-direction:column}.live-summary-head .refresh{width:100%}.live-summary-grid{gap:8px}.live-summary-grid article{padding:12px}.live-summary-grid strong{font-size:23px}}
+
+
+/* Leave and permission workflow */
+.leave-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:end}
+.leave-form label{display:grid;gap:7px;font-size:10px;font-weight:700;color:#526579}
+.leave-form input,.leave-form select,.leave-form textarea,.leave-review input{width:100%;min-width:0;border:1px solid #dfe6ee;border-radius:9px;padding:11px 12px;background:#fff;color:#173653;font:inherit;font-size:11px}
+.leave-form input,.leave-form select{height:43px}
+.leave-form textarea{resize:vertical;line-height:1.6}
+.leave-form .leave-reason{grid-column:span 2}
+.leave-form button,.leave-review button{height:42px;border:0;border-radius:9px;background:#246094;color:white;padding:0 15px;font-size:11px;font-weight:700;cursor:pointer}
+.leave-form button:disabled,.leave-review button:disabled{opacity:.55;cursor:not-allowed}
+.leave-list{display:grid;gap:12px;margin-top:18px}
+.leave-item{border:1px solid #e8edf3;border-radius:12px;padding:16px;background:#fff}
+.leave-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.leave-item-head>div{display:grid;gap:5px}.leave-item-head b{font-size:12px}.leave-item-head small{font-size:10px;color:#8a98a8}
+.leave-item .status-active,.leave-item .status-inactive,.leave-pending{font-size:9px;font-weight:800;letter-spacing:.5px;padding:7px 9px;border-radius:20px;white-space:nowrap}
+.leave-pending{color:#946313;background:#fff5dc}
+.leave-dates{margin-top:12px;color:#246094;font-size:11px;font-weight:700}
+.leave-item p{font-size:11px;line-height:1.7;color:#68798c;margin:8px 0}
+.leave-admin-note{font-size:10px;color:#536a80;background:#f4f7fa;padding:9px 11px;border-radius:8px}
+.leave-review{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-top:12px}
+.leave-review button.reject{background:#fff0f0;color:#b42318}
+.leave-filter{margin:8px 0 18px}
+@media(max-width:800px){.leave-form{grid-template-columns:1fr 1fr}.leave-form .leave-reason{grid-column:span 2}}
+@media(max-width:520px){.leave-form{grid-template-columns:1fr}.leave-form .leave-reason{grid-column:auto}.leave-review{grid-template-columns:1fr 1fr}.leave-review input{grid-column:span 2}.leave-item-head{align-items:flex-start}}
