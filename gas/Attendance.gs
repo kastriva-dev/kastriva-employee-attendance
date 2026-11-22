@@ -139,16 +139,7 @@ function saveAttendancePhoto_(user, payload, eventType, now) {
   if (!match) throw new Error("Format selfie tidak valid. Ambil foto ulang melalui kamera.");
   const bytes = Utilities.base64Decode(match[1]);
   if (!bytes.length || bytes.length > 1000000) throw new Error("Ukuran selfie maksimal 1 MB. Ambil foto ulang.");
-  const props = PropertiesService.getScriptProperties();
-  let folder;
-  const folderId = props.getProperty("ATTENDANCE_PHOTO_FOLDER_ID");
-  if (folderId) {
-    try { folder = DriveApp.getFolderById(folderId); } catch (e) { folder = null; }
-  }
-  if (!folder) {
-    folder = DriveApp.createFolder("Kastriva Employee Attendance - Selfie");
-    props.setProperty("ATTENDANCE_PHOTO_FOLDER_ID", folder.getId());
-  }
+  const folder = getAttendancePhotoFolder_();
   const dateKey = Utilities.formatDate(now, ATTENDANCE_TIMEZONE, "yyyyMMdd_HHmmss");
   const safeNik = String(user.nik || "").replace(/[^0-9]/g, "");
   const fileName = eventType + "_" + safeNik + "_" + dateKey + "_" + Utilities.getUuid().slice(0, 8) + ".jpg";
@@ -216,4 +207,24 @@ function publicAttendance_(r) {
     jam_pulang: r.jam_pulang || "",
     status: r.status || ""
   };
+}
+
+/**
+ * Run this function manually once from the Apps Script editor to authorize Drive
+ * access and create the private selfie folder before deploying the web app.
+ */
+function authorizeAttendanceDrive() {
+  const folder = getAttendancePhotoFolder_();
+  return { authorized: true, folderId: folder.getId(), folderName: folder.getName() };
+}
+
+function getAttendancePhotoFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty("ATTENDANCE_PHOTO_FOLDER_ID");
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { console.warn("Stored selfie folder is unavailable; creating a replacement."); }
+  }
+  const folder = DriveApp.createFolder("Kastriva Employee Attendance - Selfie");
+  props.setProperty("ATTENDANCE_PHOTO_FOLDER_ID", folder.getId());
+  return folder;
 }
