@@ -100,7 +100,7 @@ export default function AttendancePage(){
 
   return <main className="workspace">
     <aside className="workspace-side">
-      <div className="auth-brand"><b>K</b><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
+      <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva" /><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
       <div className="side-caption">WORKSPACE</div>
       <a className="side-link" href="/">▦　Ringkasan</a>
       <div className="side-link active">◎　Absensi GPS</div>
