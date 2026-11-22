@@ -52,7 +52,7 @@ function getTodayAttendance_(user) {
   const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
   const rows = readObjects_(sheet_("Attendance"));
   const record = rows.find(function(r) {
-    return String(r.employee_id) === String(user.employee_id) && String(r.tanggal) === today;
+    return String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
   }) || null;
   return { date: today, record: record ? publicAttendance_(record) : null, office: officeSettings_() };
 }
@@ -152,6 +152,13 @@ function appendObject_(sh, item) {
     if (map[key]) row[map[key] - 1] = item[key];
   });
   sh.appendRow(row);
+}
+
+function attendanceDateKey_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
+  }
+  return String(value || "").trim();
 }
 
 function publicAttendance_(r) {
