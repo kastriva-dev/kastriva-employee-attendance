@@ -66,7 +66,7 @@ function checkIn_(user, payload) {
     const sh = sheet_("Attendance");
     const rows = readObjects_(sh);
     const existing = rows.find(function(r) {
-      return String(r.employee_id) === String(user.employee_id) && String(r.tanggal) === today;
+      return String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
     });
     if (existing) throw new Error("Absensi masuk hari ini sudah tercatat.");
     const now = new Date();
@@ -94,7 +94,7 @@ function checkOut_(user, payload) {
     const sh = sheet_("Attendance");
     const rows = readObjects_(sh);
     const existing = rows.find(function(r) {
-      return String(r.employee_id) === String(user.employee_id) && String(r.tanggal) === today;
+      return String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
     });
     if (!existing || !existing.jam_masuk) throw new Error("Belum ada absensi masuk hari ini.");
     if (existing.jam_pulang) throw new Error("Absensi pulang hari ini sudah tercatat.");
