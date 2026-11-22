@@ -37,6 +37,10 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = { employees: listEmployees_() };
         break;
+      case "dashboard.summary":
+        requireAdmin_(body.sessionToken);
+        data = dashboardSummary_();
+        break;
       case "employees.create":
         requireAdmin_(body.sessionToken);
         data = { employee: createEmployee_(payload) };
@@ -300,4 +304,46 @@ function constantTimeEquals_(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+
+/** Live dashboard metrics sourced directly from Employees and Attendance sheets. */
+function dashboardSummary_() {
+  const today = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd");
+  const employees = readObjects_(sheet_("Employees"));
+  const attendance = readObjects_(sheet_("Attendance")).filter(function(r) {
+    return attendanceDateKey_(r.tanggal) === today;
+  });
+  const activeEmployees = employees.filter(function(r) {
+    return String(r.status).toUpperCase() === "ACTIVE";
+  });
+  const byEmployee = {};
+  attendance.forEach(function(r) { byEmployee[String(r.employee_id)] = r; });
+  const present = attendance.filter(function(r) {
+    return String(r.status).toUpperCase() === "HADIR" || Boolean(r.jam_masuk);
+  }).length;
+  const recent = attendance.slice().sort(function(a, b) {
+    return new Date(b.jam_masuk || b.created_at || 0).getTime() - new Date(a.jam_masuk || a.created_at || 0).getTime();
+  }).slice(0, 8).map(function(r) {
+    return {
+      attendance_id: String(r.attendance_id || ""),
+      employee_id: String(r.employee_id || ""),
+      nama: String(r.nama || ""),
+      nik: String(r.nik || ""),
+      tanggal: attendanceDateKey_(r.tanggal),
+      jam_masuk: r.jam_masuk || "",
+      jam_pulang: r.jam_pulang || "",
+      status: String(r.status || "")
+    };
+  });
+  return {
+    date: today,
+    totalEmployees: employees.length,
+    activeEmployees: activeEmployees.length,
+    inactiveEmployees: employees.length - activeEmployees.length,
+    present: present,
+    notYetPresent: Math.max(0, activeEmployees.length - present),
+    attendanceCount: attendance.length,
+    recentAttendance: recent
+  };
 }
