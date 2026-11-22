@@ -73,7 +73,7 @@ function checkIn_(user, payload) {
     const item = {
       attendance_id: "ATT-" + Utilities.getUuid().slice(0, 8).toUpperCase(),
       employee_id: user.employee_id, nik: user.nik, nama: user.nama,
-      tanggal: today, jam_masuk: now, foto_masuk: "",
+      tanggal: today, jam_masuk: now, foto_masuk: saveAttendancePhoto_(payload.photoData, user, "masuk", now, location),
       lat_masuk: location.latitude, lng_masuk: location.longitude,
       accuracy_masuk: location.accuracy, status: "HADIR", created_at: now
     };
@@ -99,7 +99,9 @@ function checkOut_(user, payload) {
     if (!existing || !existing.jam_masuk) throw new Error("Belum ada absensi masuk hari ini.");
     if (existing.jam_pulang) throw new Error("Absensi pulang hari ini sudah tercatat.");
     const now = new Date();
+    const photoId = saveAttendancePhoto_(payload.photoData, user, "pulang", now, location);
     const map = headerMap_(sh);
+    sh.getRange(existing._row, map.foto_pulang).setValue(photoId);
     sh.getRange(existing._row, map.jam_pulang).setValue(now);
     sh.getRange(existing._row, map.lat_pulang).setValue(location.latitude);
     sh.getRange(existing._row, map.lng_pulang).setValue(location.longitude);
