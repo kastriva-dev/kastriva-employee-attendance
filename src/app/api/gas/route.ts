@@ -7,7 +7,9 @@ const MAX_BODY = 256 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "initialize", "auth.login", "auth.me", "auth.logout",
-  "employees.list", "employees.create", "employees.setStatus"
+  "employees.list", "employees.create", "employees.setStatus",
+  "attendance.today", "attendance.checkIn", "attendance.checkOut",
+  "settings.office.update"
 ];
 
 export async function POST(request: NextRequest) {
