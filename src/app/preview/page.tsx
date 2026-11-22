@@ -19,8 +19,9 @@ const pages: {id:Page; label:string; icon:string; group:string}[] = [
  {id:"settings",label:"Pengaturan",icon:"⚙",group:"SISTEM"}
 ];
 function currentDateLabel(){return new Intl.DateTimeFormat("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Jakarta"}).format(new Date()).toLocaleUpperCase("id-ID");}
+function currentGreeting(){const hour=Number(new Intl.DateTimeFormat("en-US",{hour:"2-digit",hourCycle:"h23",timeZone:"Asia/Jakarta"}).format(new Date()));return hour<11?"Selamat pagi":hour<15?"Selamat siang":hour<18?"Selamat sore":"Selamat malam";}
 const heading:Record<Page,{title:string;desc:string;crumb:string}> = {
- overview:{title:"Selamat pagi, Diky",desc:"Berikut ringkasan aktivitas dan kehadiran tim hari ini.",crumb:"Ringkasan"},
+ overview:{title:"",desc:"Berikut ringkasan aktivitas dan kehadiran tim hari ini.",crumb:"Ringkasan"},
  attendance:{title:"Kehadiran karyawan",desc:"Pantau check-in, check-out, lokasi, dan status kehadiran tim.",crumb:"Kehadiran"},
  employees:{title:"Direktori karyawan",desc:"Kelola profil, departemen, jabatan, dan status akun karyawan.",crumb:"Karyawan"},
  leave:{title:"Izin & cuti",desc:"Tinjau pengajuan izin, sakit, dan cuti dari karyawan.",crumb:"Izin & cuti"},
@@ -50,7 +51,7 @@ export default function PreviewPage() {
   <section className="ui-main">
    <header className="ui-top"><button className="hamburger" onClick={()=>setMobile(true)}>☰</button><div className="crumb">Workspace　/　<strong>{h.crumb}</strong></div><div className="top-right"><span className="preview-label"><i/>MODE PRATINJAU</span><button onClick={()=>notify("Belum ada notifikasi baru.")}>♧</button><b className="mini-avatar">DH</b><span className="top-name">Diky Hermansyah<small>Administrator</small></span></div></header>
    <div className="ui-content">
-    <div className="page-title"><div><small>WORKSPACE / {h.crumb.toUpperCase()}</small><h1>{h.title}</h1><p>{h.desc}</p></div><div className="title-actions"><button className="light-btn" onClick={()=>notify("Pratinjau diperbarui.")}>↻ Refresh</button><button className="primary-btn" onClick={()=>notify("Aksi akan dihubungkan ke backend pada tahap berikutnya.")}>＋ {active==="employees"?"Tambah karyawan":active==="leave"?"Buat pengajuan":"Unduh laporan"}</button></div></div>
+    <div className="page-title"><div><small>WORKSPACE / {h.crumb.toUpperCase()}</small><h1>{active==="overview"?`${currentGreeting()}, Diky`:h.title}</h1><p>{h.desc}</p></div><div className="title-actions"><button className="light-btn" onClick={()=>notify("Pratinjau diperbarui.")}>↻ Refresh</button><button className="primary-btn" onClick={()=>notify("Aksi akan dihubungkan ke backend pada tahap berikutnya.")}>＋ {active==="employees"?"Tambah karyawan":active==="leave"?"Buat pengajuan":"Unduh laporan"}</button></div></div>
     {active==="overview"&&<>
      <section className="welcome-hero"><div><span className="hero-chip">●　{currentDateLabel()}</span><h2>Bangun hari kerja<br/><em>yang lebih produktif.</em></h2><p>Kelola kehadiran tim dengan lebih mudah, transparan, dan terukur dalam satu ruang kerja.</p><button onClick={()=>setActive("attendance")}>Lihat kehadiran hari ini　→</button></div><div className="hero-visual"><div className="hero-orbit"/><div className="hero-card"><small>ATTENDANCE OVERVIEW</small><b>✓</b><strong>Good morning!</strong><span>Your team is doing great.</span><hr/><footer><small>Today's attendance</small><strong>92%</strong></footer></div><i className="float-tag">✦ On time</i></div><strong className="hero-watermark">K</strong></section>
      <div className="section-head"><div><h2>Ringkasan hari ini</h2><p>Snapshot aktivitas karyawan pada hari ini.</p></div><span>▦　{new Intl.DateTimeFormat("id-ID",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Jakarta"}).format(new Date())}</span></div>
