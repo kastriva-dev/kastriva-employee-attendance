@@ -220,7 +220,7 @@ export default function AttendancePage(){
           <div className="section-heading"><div><small>VERIFIKASI WAJIB</small><h2>Ambil selfie {actionLabel}</h2></div><span>Kamera langsung</span></div>
           <p className="attendance-muted">Posisikan wajah di dalam bingkai. Tidak tersedia pilihan unggah atau galeri.</p>
           {cameraError&&<p className="attendance-error">{cameraError}</p>}
-          <div className="camera-frame">{cameraReady?<video ref={videoRef} autoPlay playsInline muted/>:<div className="camera-loading">{cameraError?"Kamera belum aktif":"Mengaktifkan kamera..."}</div>}</div>
+          <div className="camera-frame"><video ref={videoRef} autoPlay playsInline muted className="camera-video"/>{!cameraReady&&<div className="camera-loading">{cameraError?"Kamera belum aktif":"Mengaktifkan kamera..."}</div>}</div>
           <div className="attendance-actions"><button className="secondary" onClick={cancelCapture} disabled={busy}>Batal</button><button onClick={capturePhoto} disabled={!cameraReady||busy}>Ambil Foto Selfie</button></div>
         </section>}
         {user.role==="admin"&&<section className="attendance-card">
