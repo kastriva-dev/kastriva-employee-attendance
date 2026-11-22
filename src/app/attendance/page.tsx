@@ -19,7 +19,7 @@ function getPosition():Promise<Geo>{
     if(!("geolocation" in navigator)){reject(new Error("Browser tidak mendukung GPS."));return;}
     navigator.geolocation.getCurrentPosition(
       p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}),
-      e=>reject(new Error(e.code===1?"Izin lokasi ditolak. Izinkan akses lokasi pada browser.":e.code===2?"Lokasi tidak dapat ditemukan. Aktifkan GPS lalu coba lagi.":"Waktu mengambil lokasi habis. Coba kembali."),
+      e=>reject(new Error(e.code===1?"Izin lokasi ditolak. Izinkan akses lokasi pada browser.":e.code===2?"Lokasi tidak dapat ditemukan. Aktifkan GPS lalu coba lagi.":"Waktu mengambil lokasi habis. Coba kembali.")),
       {enableHighAccuracy:true,timeout:20000,maximumAge:0}
     );
   });
@@ -27,7 +27,7 @@ function getPosition():Promise<Geo>{
 
 function timeLabel(value:string|Date|null|undefined){
   if(!value)return "—";
-  const d=new Date(value);
+  const d=value instanceof Date?value:new Date(value);
   return Number.isNaN(d.getTime())?"—":d.toLocaleTimeString("id-ID",{timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 
