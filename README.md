@@ -14,7 +14,8 @@ Jangan commit `.env.local` atau membagikan nilai secret.
 ## Fitur yang ada di repository
 
 - Login menggunakan NIK dan PIN, role admin/karyawan, dan session cookie `HttpOnly`.
-- Pembuatan dan aktivasi/nonaktifkan karyawan oleh admin.
+- Dashboard admin dengan ringkasan karyawan, hadir/belum hadir hari ini, aktivitas masuk, dan tren tujuh hari.
+- Tambah, edit, reset PIN, dan aktivasi/nonaktifkan karyawan oleh admin.
 - Absensi masuk/pulang dengan selfie dari kamera, data lokasi, pemeriksaan radius kantor, dan timestamp pencatatan dari server.
 - Proxy Next.js ke endpoint GAS; secret GAS hanya dikirim dari server.
 - Foto absensi disimpan melalui GAS ke Google Drive.
@@ -42,7 +43,7 @@ Deploy GAS sebagai Web App dengan izin akses yang sesuai, kemudian atur environm
 
 ## Fitur yang belum tersedia di UI
 
-Dashboard HR dan statistik, edit/reset PIN karyawan, riwayat serta ekspor absensi, laporan, pengajuan izin/sakit, dan retensi otomatis foto belum tersedia sebagai modul lengkap. Fitur tersebut perlu dibangun dan diuji sebelum aplikasi dinyatakan siap produksi.
+Statistik keterlambatan (menunggu konfigurasi jam kerja), riwayat serta ekspor absensi, detail profil karyawan, pencarian/filter, pengelolaan departemen/jabatan, laporan, pengajuan izin/sakit, dan retensi otomatis foto belum tersedia sebagai modul lengkap. Fitur tersebut perlu dibangun dan diuji sebelum aplikasi dinyatakan siap produksi.
 
 ## Pemeriksaan sebelum rilis
 

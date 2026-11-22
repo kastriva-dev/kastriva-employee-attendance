@@ -50,6 +50,9 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = setEmployeeStatus_(payload);
         break;
+      case "admin.dashboard":
+        data = getAdminDashboard_(requireAdmin_(body.sessionToken));
+        break;
       case "attendance.today":
         data = getTodayAttendance_(requireSession_(body.sessionToken));
         break;
@@ -317,6 +320,56 @@ function setEmployeeStatus_(payload) {
   }
   sh.getRange(user._row, headerMap_(sh).status).setValue(status);
   return { updated: true, employee_id: id, status: status };
+}
+
+function getAdminDashboard_(admin) {
+  const employees = readObjects_(sheet_("Employees"));
+  const attendance = readObjects_(sheet_("Attendance"));
+  const active = employees.filter(function(r) { return String(r.status).toUpperCase() === "ACTIVE"; });
+  const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
+  const todayRows = attendance.filter(function(r) { return attendanceDateKey_(r.tanggal) === today && r.jam_masuk; });
+  const activeIds = {};
+  active.forEach(function(r) { activeIds[String(r.employee_id)] = true; });
+  const attendedIds = {};
+  todayRows.forEach(function(r) {
+    const id = String(r.employee_id);
+    if (activeIds[id]) attendedIds[id] = true;
+  });
+
+  const week = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const date = new Date(Date.now() - offset * 24 * 60 * 60 * 1000);
+    const key = Utilities.formatDate(date, ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
+    const ids = {};
+    attendance.forEach(function(r) {
+      if (attendanceDateKey_(r.tanggal) === key && r.jam_masuk && activeIds[String(r.employee_id)]) ids[String(r.employee_id)] = true;
+    });
+    week.push({ date: key, count: Object.keys(ids).length });
+  }
+
+  const latest = todayRows.slice().sort(function(a, b) {
+    return attendanceTimestampValue_(b) - attendanceTimestampValue_(a);
+  }).slice(0, 8).map(function(r) {
+    return { employee_id: r.employee_id, nik: r.nik, nama: r.nama, jam_masuk: r.jam_masuk, jam_pulang: r.jam_pulang || "", status: r.status || "HADIR" };
+  });
+
+  return {
+    date: today,
+    employeeTotal: employees.length,
+    activeEmployees: active.length,
+    inactiveEmployees: employees.length - active.length,
+    presentToday: Object.keys(attendedIds).length,
+    absentToday: Math.max(0, active.length - Object.keys(attendedIds).length),
+    checkInsToday: todayRows.length,
+    week: week,
+    latest: latest
+  };
+}
+
+function attendanceTimestampValue_(row) {
+  const value = row.created_at || row.jam_masuk || "";
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function ensureHeaders_(sh, expected) {

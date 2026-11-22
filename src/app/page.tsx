@@ -3,12 +3,14 @@ import {useEffect,useState} from "react";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Employee=User&{created_at?:string;last_login?:string};
+type Dashboard={date:string;employeeTotal:number;activeEmployees:number;inactiveEmployees:number;presentToday:number;absentToday:number;checkInsToday:number;week:{date:string;count:number}[];latest:{employee_id:string;nik:string;nama:string;jam_masuk:string|Date;jam_pulang:string|Date;status:string}[]};
 async function api(action:string,payload:Record<string,unknown>={}) {
   const response=await fetch("/api/gas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload}),cache:"no-store"});
   const result=await response.json();
   if(!response.ok||!result.ok) throw new Error(result.error||"Permintaan gagal.");
   return result.data;
 }
+function displayTime(value:string|Date){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?"—":new Intl.DateTimeFormat("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"}).format(parsed);}
 export default function Home(){
   const [user,setUser]=useState<User|null>(null);
   const [checking,setChecking]=useState(true);
@@ -17,6 +19,7 @@ export default function Home(){
   const [nik,setNik]=useState("");
   const [pin,setPin]=useState("");
   const [employees,setEmployees]=useState<Employee[]>([]);
+  const [dashboard,setDashboard]=useState<Dashboard|null>(null);
   const [form,setForm]=useState({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});
   const [editing,setEditing]=useState<{employee_id:string;nik:string;nama:string;jabatan:string}|null>(null);
   const [resetting,setResetting]=useState<string|null>(null);
@@ -24,23 +27,24 @@ export default function Home(){
   const [notice,setNotice]=useState("");
 
   async function loadEmployees(){const d=await api("employees.list");setEmployees(d.employees||[]);}
-  useEffect(()=>{api("auth.me").then(d=>{setUser(d.user);if(d.user?.role==="admin")return loadEmployees();}).catch(()=>{}).finally(()=>setChecking(false));},[]);
+  async function loadDashboard(){const d=await api("admin.dashboard");setDashboard(d);}
+  useEffect(()=>{api("auth.me").then(async d=>{setUser(d.user);if(d.user?.role==="admin")await Promise.all([loadEmployees(),loadDashboard()]);}).catch(()=>{}).finally(()=>setChecking(false));},[]);
 
   async function login(e:React.FormEvent){
     e.preventDefault();setBusy(true);setError("");
-    try{const d=await api("auth.login",{nik,pin});setUser(d.user);setPin("");if(d.user?.role==="admin")await loadEmployees();}
+    try{const d=await api("auth.login",{nik,pin});setUser(d.user);setPin("");if(d.user?.role==="admin")await Promise.all([loadEmployees(),loadDashboard()]);}
     catch(err){setError(err instanceof Error?err.message:"Login gagal.");}
     finally{setBusy(false);}
   }
-  async function logout(){setBusy(true);try{await api("auth.logout");}finally{setUser(null);setEmployees([]);setBusy(false);}}
+  async function logout(){setBusy(true);try{await api("auth.logout");}finally{setUser(null);setEmployees([]);setDashboard(null);setBusy(false);}}
   async function createEmployee(e:React.FormEvent){
     e.preventDefault();setBusy(true);setError("");setNotice("");
-    try{await api("employees.create",form);setForm({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});await loadEmployees();setNotice("Karyawan berhasil ditambahkan.");}
+    try{await api("employees.create",form);setForm({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});await Promise.all([loadEmployees(),loadDashboard()]);setNotice("Karyawan berhasil ditambahkan.");}
     catch(err){setError(err instanceof Error?err.message:"Gagal menambahkan karyawan.");}
     finally{setBusy(false);}
   }
   async function toggleStatus(item:Employee){
-    setBusy(true);setError("");try{await api("employees.setStatus",{employee_id:item.employee_id,status:item.status==="ACTIVE"?"INACTIVE":"ACTIVE"});await loadEmployees();}
+    setBusy(true);setError("");try{await api("employees.setStatus",{employee_id:item.employee_id,status:item.status==="ACTIVE"?"INACTIVE":"ACTIVE"});await Promise.all([loadEmployees(),loadDashboard()]);}
     catch(err){setError(err instanceof Error?err.message:"Gagal mengubah status.");}finally{setBusy(false);}
   }
   async function saveEmployee(e:React.FormEvent){
@@ -71,6 +75,7 @@ export default function Home(){
     <section className="workspace-main"><header className="workspace-header"><div><small>WORKSPACE / OVERVIEW</small><h1>Halo, {user.nama.split(" ")[0]}.</h1></div><button className="logout" onClick={logout} disabled={busy}>Keluar ↗</button></header>
       <div className="workspace-content"><section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Sistem kehadiran<br/><em>yang lebih terukur.</em></h2><p>Selamat datang di ruang kerja digital Kastriva. Buka menu Absensi GPS untuk mencatat kehadiran dengan verifikasi lokasi dan foto selfie.</p></div><div className="welcome-mark">K</div></section>
       <div className="profile-panel"><div><small>AKUN AKTIF</small><h3>{user.nama}</h3><p>{user.nik} · {user.jabatan||"Tanpa jabatan"}</p></div><span className="status-active">● {user.status}</span></div>
+      {user.role==="admin"&&dashboard&&<section className="dashboard-section"><div className="section-heading"><div><small>ATTENDANCE OVERVIEW</small><h2>Ringkasan Kehadiran</h2></div><span>{dashboard.date}</span></div><div className="dashboard-stats"><article><small>SELURUH KARYAWAN</small><b>{dashboard.employeeTotal}</b><span>{dashboard.activeEmployees} aktif · {dashboard.inactiveEmployees} nonaktif</span></article><article><small>HADIR HARI INI</small><b>{dashboard.presentToday}</b><span>dari {dashboard.activeEmployees} karyawan aktif</span></article><article><small>BELUM HADIR</small><b>{dashboard.absentToday}</b><span>karyawan aktif</span></article><article><small>CHECK-IN HARI INI</small><b>{dashboard.checkInsToday}</b><span>catatan kehadiran</span></article></div><div className="dashboard-detail"><section className="dashboard-chart"><h3>Hadir · 7 hari terakhir</h3><div className="chart-bars">{dashboard.week.map(day=>{const max=Math.max(1,...dashboard.week.map(item=>item.count));return <div className="chart-column" key={day.date}><b>{day.count}</b><div className="chart-track"><i style={{height:`${Math.max(5,day.count/max*100)}%`}}/></div><small>{day.date.slice(8,10)}</small></div>;})}</div></section><section className="dashboard-activity"><h3>Aktivitas masuk hari ini</h3>{dashboard.latest.length?dashboard.latest.slice(0,5).map(item=><div className="activity-row" key={item.employee_id}><span className="activity-avatar">{item.nama.slice(0,1).toUpperCase()}</span><div><b>{item.nama}</b><small>{item.nik} · Masuk {displayTime(item.jam_masuk)}</small></div></div>):<p className="dashboard-empty">Belum ada absensi masuk hari ini.</p>}</section></div></section>}
       {user.role==="admin"&&<><section className="employee-section"><div className="section-heading"><div><small>PEOPLE MANAGEMENT</small><h2>Tambah Karyawan</h2></div><span>{employees.length} akun</span></div>
         <form className="employee-form" onSubmit={createEmployee}>
           <label>NIK<input value={form.nik} onChange={e=>setForm({...form,nik:e.target.value})} inputMode="numeric" required placeholder="NIK karyawan"/></label>
