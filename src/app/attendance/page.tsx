@@ -42,7 +42,11 @@ export default function AttendancePage(){
   const [checking,setChecking]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
-  const [geo,setGeo]=useState<Geo|null>(null);\n  const [photoData,setPhotoData]=useState("");\n  const [photoPreview,setPhotoPreview]=useState("");\n  const [pendingAction,setPendingAction]=useState<"attendance.checkIn"|"attendance.checkOut"|null>(null);\n  const cameraRef=useRef<HTMLInputElement>(null);
+  const [geo,setGeo]=useState<Geo|null>(null);
+  const [photoData,setPhotoData]=useState("");
+  const [photoPreview,setPhotoPreview]=useState("");
+  const [pendingAction,setPendingAction]=useState<"attendance.checkIn"|"attendance.checkOut"|null>(null);
+  const cameraRef=useRef<HTMLInputElement>(null);
 
   const refresh=useCallback(async()=>{
     const d=await api("attendance.today");
