@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 const MAX_BODY = 256 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
-  "ping", "initialize", "auth.login", "auth.me", "auth.logout",
-  "employees.list", "employees.create", "employees.setStatus",
+  "ping", "auth.login", "auth.me", "auth.logout",
+  "employees.list", "employees.create", "employees.setStatus", "dashboard.summary",
   "attendance.today", "attendance.checkIn", "attendance.checkOut",
   "settings.office.update"
 ];
