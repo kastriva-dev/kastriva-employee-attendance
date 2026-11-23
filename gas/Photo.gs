@@ -58,7 +58,7 @@ function getAttendancePhoto_(admin, payload) {
   const bytes = blob.getBytes();
   if (!bytes.length || bytes.length > 180 * 1024) throw new Error("Ukuran foto tidak sesuai batas penyimpanan.");
   const mime = blob.getContentType() || "image/jpeg";
-  if (!/^image\\/(jpeg|jpg|png|webp)$/i.test(mime)) throw new Error("Format bukti foto tidak didukung.");
+  if (!/^image\/(jpeg|jpg|png|webp)$/i.test(mime)) throw new Error("Format bukti foto tidak didukung.");
   return {
     attendance_id: attendanceId,
     phase: phase,
