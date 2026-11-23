@@ -174,7 +174,7 @@ export default function AttendancePage(){
       const p=geo||await getPosition();
       const d=await api(pendingAction,{...p,photoData});
       setRecord(d.record||null);
-      setNotice((pendingAction==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat beserta selfie. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
+      setNotice((pendingAction==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat beserta selfie."+ (d.distanceMeters==null?" Mode bebas lokasi aktif; koordinat GPS tetap tersimpan.":" Jarak dari titik kantor: "+d.distanceMeters+" meter."));
       setPhotoData("");setPhotoPreview("");setPendingAction(null);stopLiveCamera();
     }catch(e){setError(e instanceof Error?e.message:"Absensi gagal.");}
     finally{setBusy(false);}
