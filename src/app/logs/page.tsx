@@ -41,7 +41,7 @@ export default function LogsPage(){
      <div className="leave-list">
       {rows.map(r=><article className="leave-item audit-item" key={r.log_id}>
        <div className="leave-item-head"><div><b>{eventLabel(r.event)}</b><small>{dateTime(r.created_at)}</small></div><span className="status-active">{r.actor_role==="admin"?"ADMIN":"AKUN"}</span></div>
-       <p><strong>Pelaku:</strong> {r.actor_name||r.actor} {r.actor&&"· NIK "+r.actor}</p>
+       <p><strong>Pelaku:</strong> {r.actor_name||"Nama karyawan tidak ditemukan"}</p>
        {r.target_name&&<p><strong>Target:</strong> {r.target_name}{r.target_nik?" · NIK "+r.target_nik:""}</p>}
        {r.detail&&<p>{r.detail}</p>}
        {(r.before_value||r.after_value)&&<div className="audit-change"><div><small>SEBELUM</small><pre>{r.before_value||"—"}</pre></div><div><small>SESUDAH</small><pre>{r.after_value||"—"}</pre></div></div>}
