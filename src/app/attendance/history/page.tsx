@@ -99,7 +99,7 @@ export default function AttendanceHistoryPage(){
       const fields=["attendance_id","employee_id","nama","nik","tanggal","jam_masuk","jam_pulang","status","latitude_masuk","longitude_masuk","akurasi_masuk","latitude_pulang","longitude_pulang","akurasi_pulang"];
       const quote=(v:unknown)=>'"'+String(v??"").replace(/"/g,'""')+'"';
       const lines=[headers.map(quote).join(";"),...(result.records||[]).map((row:Record<string,unknown>)=>fields.map(k=>quote(row[k])).join(";"))];
-      const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+      const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="rekap-absensi-"+(from||"awal")+"-sd-"+(to||"terakhir")+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
       setExportMessage((result.total||0)+" baris berhasil diekspor. File CSV dapat dibuka langsung di Microsoft Excel.");
     }catch(e){setExportMessage(e instanceof Error?e.message:"Gagal mengekspor rekap.");}
