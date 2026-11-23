@@ -8,6 +8,16 @@ async function api(action:string,payload:Record<string,unknown>={}) {
  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||"Permintaan gagal.");return result.data;
 }
 function statusClass(status:string){return status==="APPROVED"?"status-active":status==="REJECTED"?"status-inactive":"leave-pending";}
+function formatTanggalIndonesia(value:string|Date|undefined){
+ if(!value)return "—";
+ const raw=String(value).trim();
+ let date:Date;
+ const dateOnly=raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+ if(dateOnly) date=new Date(Number(dateOnly[1]),Number(dateOnly[2])-1,Number(dateOnly[3]),12,0,0);
+ else date=new Date(raw);
+ if(Number.isNaN(date.getTime()))return raw;
+ return new Intl.DateTimeFormat("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:dateOnly?undefined:"Asia/Jakarta"}).format(date);
+}
 export default function LeavePage(){
  const [user,setUser]=useState<User|null>(null);
  const [rows,setRows]=useState<Leave[]>([]);
@@ -46,16 +56,16 @@ export default function LeavePage(){
  if(!user)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
  return <main className="workspace">
   <aside className="workspace-side">
-   <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva"/><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
-   <div className="side-caption">WORKSPACE</div>
+   <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva"/><span><strong>KASTRIVA</strong><small>SISTEM KEPEGAWAIAN</small></span></div>
+   <div className="side-caption">RUANG KERJA</div>
    <a className="side-link" href="/"><span className="nav-icon">▦</span><span className="nav-label">Ringkasan</span></a><a className="side-link" href="/attendance"><span className="nav-icon">◎</span><span className="nav-label">Absensi GPS</span></a><a className="side-link" href="/attendance/history"><span className="nav-icon">▤</span><span className="nav-label">Riwayat</span></a><a className="side-link active" aria-current="page" href="/leave"><span className="nav-icon">▧</span><span className="nav-label">Izin & Cuti</span></a>
    <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{admin?"Administrator":"Karyawan"}</small></span></div>
   </aside>
   <section className="workspace-main">
-   <header className="workspace-header"><div><small>WORKSPACE / REQUESTS</small><h1>Izin & Cuti</h1></div><a className="logout" href="/">Kembali ↗</a></header>
+   <header className="workspace-header"><div><small>RUANG KERJA / PENGAJUAN</small><h1>Izin & Cuti</h1></div><a className="logout" href="/">Kembali ↗</a></header>
    <div className="workspace-content">
     <section className="employee-section">
-     <div className="section-heading"><div><small>{admin?"REQUEST MANAGEMENT":"EMPLOYEE REQUEST"}</small><h2>{admin?"Pengajuan seluruh karyawan":"Ajukan izin atau cuti"}</h2><p>{admin?"Tinjau dan putuskan permohonan yang masuk.":"Pengajuan tersimpan di sistem dan menunggu keputusan administrator."}</p></div></div>
+     <div className="section-heading"><div><small>{admin?"PENGELOLAAN PENGAJUAN":"PENGAJUAN KARYAWAN"}</small><h2>{admin?"Pengajuan seluruh karyawan":"Ajukan izin atau cuti"}</h2><p>{admin?"Tinjau dan putuskan permohonan yang masuk.":"Pengajuan tersimpan di sistem dan menunggu keputusan administrator."}</p></div></div>
      <form className="leave-form" onSubmit={submit}>
       <label>Jenis pengajuan<select value={jenis} onChange={e=>setJenis(e.target.value)}><option value="IZIN">Izin</option><option value="CUTI">Cuti</option><option value="SAKIT">Sakit</option></select></label>
       <label>Tanggal mulai<input type="date" value={start} onChange={e=>setStart(e.target.value)} required/></label>
@@ -65,7 +75,7 @@ export default function LeavePage(){
      </form>
     </section>
     <section className="employee-section">
-     <div className="section-heading"><div><small>GOOGLE SHEETS · LIVE RECORDS</small><h2>{admin?"Daftar pengajuan":"Pengajuan saya"}</h2><p>{rows.length} catatan ditampilkan</p></div><button className="refresh" onClick={load} disabled={busy}>Muat ulang ↻</button></div>
+     <div className="section-heading"><div><small>GOOGLE SHEETS · DATA TERKINI</small><h2>{admin?"Daftar pengajuan":"Pengajuan saya"}</h2><p>{rows.length} catatan ditampilkan</p></div><button className="refresh" onClick={load} disabled={busy}>Muat ulang ↻</button></div>
      <form className="employee-form leave-filter" onSubmit={e=>{e.preventDefault();load();}}>
       <label>Dari tanggal<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
       <label>Sampai tanggal<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
@@ -76,16 +86,16 @@ export default function LeavePage(){
      <div className="leave-list">
       {rows.map(r=><article className="leave-item" key={r.request_id}>
        <div className="leave-item-head"><div><b>{r.jenis} · {r.nama}</b><small>{r.nik} · {r.request_id}</small></div><span className={statusClass(r.status)}>{r.status==="PENDING"?"MENUNGGU":r.status==="APPROVED"?"DISETUJUI":"DITOLAK"}</span></div>
-       <div className="leave-dates">{r.tanggal_mulai}{r.tanggal_selesai!==r.tanggal_mulai?" — "+r.tanggal_selesai:""}</div>
+       <div className="leave-dates">{formatTanggalIndonesia(r.tanggal_mulai)}{r.tanggal_selesai!==r.tanggal_mulai?" — "+formatTanggalIndonesia(r.tanggal_selesai):""}</div>
        <p>{r.alasan}</p>
-       {r.catatan_admin&&<div className="leave-admin-note">Catatan admin: {r.catatan_admin}</div>}
-       {admin&&r.status==="PENDING"&&<div className="leave-review"><input value={notes[r.request_id]||""} onChange={e=>setNotes({...notes,[r.request_id]:e.target.value})} maxLength={300} placeholder="Catatan admin (opsional)"/><button disabled={busy} onClick={()=>review(r.request_id,"APPROVED")}>Setujui</button><button className="reject" disabled={busy} onClick={()=>review(r.request_id,"REJECTED")}>Tolak</button></div>}
+       {r.catatan_admin&&<div className="leave-admin-note">Catatan administrator: {r.catatan_admin}</div>}
+       {admin&&r.status==="PENDING"&&<div className="leave-review"><input value={notes[r.request_id]||""} onChange={e=>setNotes({...notes,[r.request_id]:e.target.value})} maxLength={300} placeholder="Catatan administrator (opsional)"/><button disabled={busy} onClick={()=>review(r.request_id,"APPROVED")}>Setujui</button><button className="reject" disabled={busy} onClick={()=>review(r.request_id,"REJECTED")}>Tolak</button></div>}
       </article>)}
       {!busy&&!rows.length&&<p className="live-empty">Belum ada pengajuan untuk filter ini.</p>}
       {busy&&!rows.length&&<p className="live-empty">Memuat data pengajuan...</p>}
      </div>
     </section>
-    <footer className="workspace-footer">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · v0.4.0</span></footer>
+    <footer className="workspace-footer">© 2026 Kastriva. Hak cipta dilindungi.<span>Employee Attendance · v0.4.0</span></footer>
    </div>
   </section>
  </main>;
