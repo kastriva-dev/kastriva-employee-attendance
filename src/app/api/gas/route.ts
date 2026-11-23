@@ -7,7 +7,7 @@ const MAX_BODY = 256 * 1024;
 const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "auth.login", "auth.me", "auth.logout",
-  "employees.list", "employees.create", "employees.setStatus", "employees.update", "employees.delete", "dashboard.summary", "dashboard.monthly",
+  "employees.list", "logs.list", "employees.create", "employees.setStatus", "employees.update", "employees.delete", "dashboard.summary", "dashboard.monthly",
   "attendance.today", "attendance.list", "attendance.export", "attendance.photo", "attendance.checkIn", "attendance.checkOut",
   "leaves.list", "leaves.create", "leaves.review",
   "settings.office.update", "settings.photoRetention.get", "settings.photoRetention.update"
