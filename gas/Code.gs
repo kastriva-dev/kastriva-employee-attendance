@@ -271,10 +271,10 @@ function updateEmployee_(admin, payload) {
   const role = String(payload.role || "employee").toLowerCase();
   const pin = String(payload.pin || "").trim();
   if (!id) throw new Error("ID karyawan tidak valid.");
-  if (!/^\\d{6,20}$/.test(nik)) throw new Error("NIK harus 6–20 digit.");
+  if (!/^\d{6,20}$/.test(nik)) throw new Error("NIK harus 6–20 digit.");
   if (!nama || nama.length > 100) throw new Error("Nama wajib diisi (maksimal 100 karakter).");
   if (["admin", "employee"].indexOf(role) < 0) throw new Error("Role tidak valid.");
-  if (pin && !/^\\d{6,12}$/.test(pin)) throw new Error("PIN baru harus 6–12 digit.");
+  if (pin && !/^\d{6,12}$/.test(pin)) throw new Error("PIN baru harus 6–12 digit.");
   const sh = sheet_("Employees"), rows = readObjects_(sh);
   const user = rows.find(function(r) { return String(r.employee_id) === id; });
   if (!user) throw new Error("Karyawan tidak ditemukan.");
