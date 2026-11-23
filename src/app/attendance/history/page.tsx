@@ -68,6 +68,8 @@ export default function AttendanceHistoryPage(){
   const [busy,setBusy]=useState(true);
   const [error,setError]=useState("");
   const [photo,setPhoto]=useState<PhotoPreview|null>(null);
+  const [photoZoom,setPhotoZoom]=useState(1);
+  const [timestampCopied,setTimestampCopied]=useState(false);
   const limit=50;
   const load=useCallback(async(nextOffset=0)=>{
     setBusy(true);setError("");
@@ -88,6 +90,13 @@ export default function AttendanceHistoryPage(){
     }).catch(()=>{window.location.href="/";});
   },[load]);
   const isAdmin=user?.role==="admin";
+  useEffect(()=>{setPhotoZoom(1);setTimestampCopied(false);},[photo?.attendance_id,photo?.phase,photo?.capturedAt]);
+  const copyPhotoTimestamp=async()=>{
+    if(!photo?.capturedAt)return;
+    const value=dateTimeLabel(photo.capturedAt)+" WIB";
+    try{await navigator.clipboard.writeText(value);setTimestampCopied(true);window.setTimeout(()=>setTimestampCopied(false),1800);}
+    catch{setTimestampCopied(false);}
+  };
 
   if(!user)return <main className="auth-shell"><div className="auth-card">Memeriksa sesi...</div></main>;
   return <main className="workspace">
@@ -124,8 +133,9 @@ export default function AttendanceHistoryPage(){
     {photo&&<div role="dialog" aria-modal="true" aria-label="Pratinjau bukti selfie" onClick={()=>setPhoto(null)} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(7,18,31,.78)",display:"grid",placeItems:"center",padding:18}}>
       <section onClick={e=>e.stopPropagation()} style={{width:"min(100%,520px)",maxHeight:"92vh",overflow:"auto",background:"#fff",borderRadius:18,padding:18,boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:12}}><div><small style={{color:"#64748b"}}>BUKTI SELFIE · {photo.phase.toUpperCase()}</small><h2 style={{margin:"4px 0",fontSize:20,color:"#173653"}}>{photo.nama}</h2></div><button className="refresh" onClick={()=>setPhoto(null)}>Tutup ✕</button></div>
-        <img src={photo.dataUrl} alt={"Bukti selfie "+photo.phase+" "+photo.nama} style={{display:"block",width:"100%",maxHeight:"62vh",objectFit:"contain",borderRadius:12,background:"#eef2f7"}}/>
-        <div style={{fontSize:13,lineHeight:1.7,color:"#475569",marginTop:12}}><div><b>NIK:</b> {photo.nik}</div><div><b>Tanggal:</b> {photo.tanggal}</div><div><b>Waktu tercatat:</b> {dateTimeLabel(photo.capturedAt)}</div><small>Foto diambil dari Drive privat dan hanya ditampilkan kepada administrator.</small></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}><small style={{color:"#64748b"}}>Scroll roda mouse di atas foto untuk zoom · Gunakan tombol + / −</small><div style={{display:"flex",gap:6,alignItems:"center"}}><button type="button" className="refresh" onClick={()=>setPhotoZoom(z=>Math.max(1,Number((z-.25).toFixed(2))))} disabled={photoZoom<=1}>−</button><span style={{fontSize:12,minWidth:44,textAlign:"center"}}>{Math.round(photoZoom*100)}%</span><button type="button" className="refresh" onClick={()=>setPhotoZoom(z=>Math.min(4,Number((z+.25).toFixed(2))))} disabled={photoZoom>=4}>+</button><button type="button" className="refresh" onClick={()=>setPhotoZoom(1)}>Reset</button></div></div>
+        <div onWheel={e=>{e.preventDefault();setPhotoZoom(z=>Math.max(1,Math.min(4,Number((z+(e.deltaY<0?.2:-.2)).toFixed(2)))));}} style={{width:"100%",height:"min(62vh,620px)",overflow:"auto",borderRadius:12,background:"#eef2f7",cursor:photoZoom>1?"grab":"zoom-in",overscrollBehavior:"contain"}}><div style={{minWidth:photoZoom>1?`${photoZoom*100}%`:"100%",minHeight:photoZoom>1?`${photoZoom*100}%`:"100%",display:"grid",placeItems:"center"}}><img src={photo.dataUrl} alt={"Bukti selfie "+photo.phase+" "+photo.nama} draggable={false} style={{display:"block",width:`${photoZoom*100}%`,maxWidth:"none",height:"auto",objectFit:"contain",borderRadius:12,transition:"width .12s ease"}}/></div></div>
+        <div style={{fontSize:13,lineHeight:1.7,color:"#475569",marginTop:12}}><div><b>NIK:</b> {photo.nik}</div><div><b>Tanggal:</b> {photo.tanggal}</div><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span><b>Waktu tercatat:</b> {dateTimeLabel(photo.capturedAt)} WIB</span><button type="button" className="refresh" onClick={copyPhotoTimestamp}>{timestampCopied?"Tersalin ✓":"Salin timestamp"}</button></div><small>Foto diambil dari Drive privat dan hanya ditampilkan kepada administrator. Timestamp yang disalin berasal dari catatan absensi server.</small></div>
       </section>
     </div>}
   </main>;
