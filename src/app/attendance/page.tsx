@@ -4,7 +4,7 @@ import {useCallback,useEffect,useRef,useState} from "react";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
-type Office={configured:boolean;latitude:number|null;longitude:number|null;radiusMeters:number};
+type Office={configured:boolean;latitude:number|null;longitude:number|null;radiusMeters:number;allowAnyLocation:boolean};
 type Geo={latitude:number;longitude:number;accuracy:number};
 
 async function reverseGeocode(position:Geo):Promise<string>{
@@ -44,6 +44,7 @@ export default function AttendancePage(){
   const [record,setRecord]=useState<Attendance|null>(null);
   const [office,setOffice]=useState<Office|null>(null);
   const [radius,setRadius]=useState("100");
+  const [allowAnyLocation,setAllowAnyLocation]=useState(false);
   const [officeLatitude,setOfficeLatitude]=useState("");
   const [officeLongitude,setOfficeLongitude]=useState("");
   const [busy,setBusy]=useState(false);
@@ -64,6 +65,7 @@ export default function AttendancePage(){
     const d=await api("attendance.today");
     setRecord(d.record||null);
     setOffice(d.office||null);
+    setAllowAnyLocation(Boolean(d.office?.allowAnyLocation));
     if(d.office?.radiusMeters)setRadius(String(d.office.radiusMeters));
     if(d.office?.configured){setOfficeLatitude(String(d.office.latitude));setOfficeLongitude(String(d.office.longitude));}
   },[]);
@@ -114,9 +116,10 @@ export default function AttendancePage(){
     e.preventDefault();setBusy(true);setError("");setNotice("");
     try{
       const latitude=Number(officeLatitude);const longitude=Number(officeLongitude);
-      if(!officeLatitude.trim()||!officeLongitude.trim()||!Number.isFinite(latitude)||!Number.isFinite(longitude))throw new Error("Isi koordinat latitude dan longitude kantor yang valid.");
-      const d=await api("settings.office.update",{latitude,longitude,radiusMeters:Number(radius)});
-      setOffice(d.office);setNotice("Lokasi kantor dan radius geofence berhasil disimpan.");
+      if(!allowAnyLocation&&(!officeLatitude.trim()||!officeLongitude.trim()||!Number.isFinite(latitude)||!Number.isFinite(longitude)))throw new Error("Isi koordinat latitude dan longitude kantor yang valid.");
+      if((officeLatitude.trim()||officeLongitude.trim())&&(!Number.isFinite(latitude)||latitude < -90||latitude > 90||!Number.isFinite(longitude)||longitude < -180||longitude > 180))throw new Error("Koordinat kantor tidak valid.");
+      const d=await api("settings.office.update",{latitude:officeLatitude.trim()?latitude:null,longitude:officeLongitude.trim()?longitude:null,radiusMeters:Number(radius),allowAnyLocation});
+      setOffice(d.office);setAllowAnyLocation(Boolean(d.office?.allowAnyLocation));setNotice("Pengaturan lokasi kantor berhasil disimpan.");
     }catch(e){setError(e instanceof Error?e.message:"Gagal menyimpan lokasi kantor.");}
     finally{setBusy(false);}
   }
@@ -208,13 +211,13 @@ export default function AttendancePage(){
             <div className="attendance-chip">Pulang: <b>{timeLabel(record?.jam_pulang)}</b></div>
             <div className="attendance-chip">Status: <b>{record?.status||"Belum absen"}</b></div>
           </div>
-          <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
+          <p className="attendance-muted">{office?.allowAnyLocation?"Absensi dari mana saja diizinkan administrator. GPS aktual tetap direkam.":office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
           {geo&&<p className="attendance-muted">Lokasi perangkat: {geo.latitude.toFixed(6)}, {geo.longitude.toFixed(6)} · akurasi ±{Math.round(geo.accuracy)} m</p>}
           {cameraOpen&&<div style={{marginTop:18,maxWidth:480}}><video ref={videoRef} autoPlay muted playsInline style={{display:"block",width:"100%",aspectRatio:"4 / 3",objectFit:"cover",borderRadius:14,background:"#071827",border:"1px solid #d7e0e8"}}/><p className="attendance-muted">{cameraReady?"Kamera langsung aktif. Pastikan wajah terlihat jelas.":"Mengaktifkan kamera..."}</p><div className="attendance-actions"><button onClick={captureLiveSelfie} disabled={busy||!cameraReady}>Ambil Foto</button><button className="secondary" onClick={()=>{stopLiveCamera();setPendingAction(null);setNotice("Pengambilan selfie dibatalkan.");}} disabled={busy}>Batalkan</button></div></div>}
           <div className="attendance-actions">
             <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
-            <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}><span>Absen Masuk</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
-            <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}><span>Absen Pulang</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
+            <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||(!office?.configured&&!office?.allowAnyLocation)||checkedIn}><span>Absen Masuk</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
+            <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||(!office?.configured&&!office?.allowAnyLocation)||!checkedIn||checkedOut}><span>Absen Pulang</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
           </div>
           {photoPreview&&<div style={{marginTop:18,maxWidth:360}}><img src={photoPreview} alt="Pratinjau selfie absensi" style={{width:"100%",borderRadius:14,border:"1px solid #d7e0e8"}}/><p className="attendance-muted">Selfie dengan watermark waktu dan koordinat GPS.</p><div className="attendance-actions"><button onClick={async()=>{setPhotoData("");setPhotoPreview("");setError("");try{await openLiveCamera();}catch(e){setError(e instanceof Error?e.message:"Kamera gagal dibuka.");}}} className="secondary" disabled={busy}>Ambil ulang</button><button onClick={submitAttendance} disabled={busy}>{busy?"Mengirim...":"Kirim Absensi"}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
@@ -223,14 +226,15 @@ export default function AttendancePage(){
         </section>
         {user.role==="admin"&&<section className="attendance-card">
           <div className="section-heading"><div><small>ADMINISTRATOR</small><h2>Pengaturan lokasi kantor</h2></div><span>{office?.configured?"Sudah dikonfigurasi":"Belum diatur"}</span></div>
-          <p className="attendance-muted">Berdirilah di titik kantor yang akan dijadikan pusat geofence, lalu ambil lokasi GPS. Atur radius antara 30–1.000 meter.</p>
+          <p className="attendance-muted">Atur titik kantor dan radius 30–1.000 meter. Jika mode bebas lokasi diaktifkan, karyawan dapat absen dari mana saja, tetapi GPS dan selfie tetap wajib.</p>
           <form className="attendance-form" onSubmit={saveOffice}>
             <label>Latitude<input value={officeLatitude} onChange={e=>setOfficeLatitude(e.target.value)} inputMode="decimal" placeholder="Contoh: -6.200000"/></label>
             <label>Longitude<input value={officeLongitude} onChange={e=>setOfficeLongitude(e.target.value)} inputMode="decimal" placeholder="Contoh: 106.816666"/></label>
             <label>Radius kantor (meter)<input type="number" min="30" max="1000" step="1" value={radius} onChange={e=>setRadius(e.target.value)} required/></label>
-            <div className="attendance-actions"><button type="button" className="secondary" onClick={locate} disabled={busy}>Gunakan lokasi saya</button><button type="submit" disabled={busy||!officeLatitude.trim()||!officeLongitude.trim()}>{busy?"Menyimpan...":"Simpan lokasi kantor"}</button></div>
+            <label style={{gridColumn:"1 / -1",display:"flex",alignItems:"center",gap:12,padding:14,border:"1px solid #d7e0e8",borderRadius:12}}><input type="checkbox" checked={allowAnyLocation} onChange={e=>setAllowAnyLocation(e.target.checked)} style={{width:18,height:18}}/><span><b>Izinkan absensi dari mana saja</b><small style={{display:"block",fontWeight:400,opacity:.75}}>Nonaktifkan pembatasan radius kantor. GPS aktual tetap wajib dan disimpan.</small></span></label>
+            <div className="attendance-actions"><button type="button" className="secondary" onClick={locate} disabled={busy}>Gunakan lokasi saya</button><button type="submit" disabled={busy||(!allowAnyLocation&&(!officeLatitude.trim()||!officeLongitude.trim()))}>{busy?"Menyimpan...":"Simpan lokasi kantor"}</button></div>
           </form>
-          {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}
+          {office?.configured&&<p className="attendance-muted">Titik tersimpan: {office.latitude?.toFixed(6)}, {office.longitude?.toFixed(6)} · radius {office.radiusMeters} meter.</p>}{allowAnyLocation&&<p className="attendance-success">Mode bebas lokasi aktif: karyawan dapat melakukan absensi dari mana saja.</p>}
         </section>}
         <p className="attendance-muted">Bukti selfie wajib untuk absen masuk dan pulang. Foto disimpan privat di folder Google Drive yang ditentukan administrator.</p>
       </div>
