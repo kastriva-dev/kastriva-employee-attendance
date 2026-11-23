@@ -409,7 +409,10 @@ function log_(event, actor, detail, meta) {
       after_value: m.after_value === undefined ? "" : JSON.stringify(m.after_value),
       created_at: new Date()
     };
-    const map = headerMap_(sh);\n    const values = new Array(sh.getLastColumn()).fill("");\n    headers.forEach(function(h) { if (map[h]) values[map[h]-1] = row[h] === undefined ? "" : row[h]; });\n    sh.appendRow(values);
+    const map = headerMap_(sh);
+    const values = new Array(sh.getLastColumn()).fill("");
+    headers.forEach(function(h) { if (map[h]) values[map[h]-1] = row[h] === undefined ? "" : row[h]; });
+    sh.appendRow(values);
   } catch (e) { console.warn(e); }
 }
 
