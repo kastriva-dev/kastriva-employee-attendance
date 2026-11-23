@@ -171,10 +171,10 @@ export default function AttendanceHistoryPage(){
     <aside className="workspace-side">
       <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva"/><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
       <div className="side-caption">WORKSPACE</div>
-      <a className="side-link" href="/"><span className="nav-icon">▦</span><span className="nav-label">Dashboard</span></a>
-      <a className="side-link" href="/attendance"><span className="nav-icon">◎</span><span className="nav-label">Absensi GPS</span></a>
-      <a className="side-link active" aria-current="page" href="/attendance/history"><span className="nav-icon">▤</span><span className="nav-label">Riwayat</span></a>
-      <a className="side-link" href="/leave"><span className="nav-icon">▧</span><span className="nav-label">Izin & Cuti</span></a>
+      <a className="side-link" href="/"><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg></span><span className="nav-label">Dashboard</span></a>
+      <a className="side-link" href="/attendance"><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/><path d="m16.5 5.5 1.5-1.5"/></svg></span><span className="nav-label">Absensi GPS</span></a>
+      <a className="side-link active" aria-current="page" href="/attendance/history"><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6M9 18h3"/></svg></span><span className="nav-label">Riwayat</span></a>
+      <a className="side-link" href="/leave"><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18m-13 5 2.5 2.5L16 14"/></svg></span><span className="nav-label">Izin & Cuti</span></a>
       <div className="side-user"><i>{user.nama.slice(0,1).toUpperCase()}</i><span><b>{user.nama}</b><small>{isAdmin?"Administrator":"Karyawan"}</small></span></div>
     </aside>
     <section className="workspace-main">
