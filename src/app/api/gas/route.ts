@@ -8,9 +8,9 @@ const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "auth.login", "auth.me", "auth.logout",
   "employees.list", "employees.create", "employees.setStatus", "dashboard.summary",
-  "attendance.today", "attendance.list", "attendance.photo", "attendance.checkIn", "attendance.checkOut",
+  "attendance.today", "attendance.list", "attendance.export", "attendance.photo", "attendance.checkIn", "attendance.checkOut",
   "leaves.list", "leaves.create", "leaves.review",
-  "settings.office.update"
+  "settings.office.update", "settings.photoRetention.get", "settings.photoRetention.update"
 ];
 
 export async function POST(request: NextRequest) {
