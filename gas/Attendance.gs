@@ -17,21 +17,30 @@ function officeSettings_() {
     configured: Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180,
     latitude: lat,
     longitude: lng,
-    radiusMeters: Number.isFinite(radius) && radius >= 30 ? radius : DEFAULT_OFFICE_RADIUS_METERS
+    radiusMeters: Number.isFinite(radius) && radius >= 30 ? radius : DEFAULT_OFFICE_RADIUS_METERS,
+    allowAnyLocation: String(values.office_allow_any_location || "FALSE").toUpperCase() === "TRUE"
   };
 }
 
 function updateOfficeSettings_(actor, payload) {
-  const lat = Number(payload.latitude);
-  const lng = Number(payload.longitude);
+  const allowAnyLocation = payload.allowAnyLocation === true;
+  const hasLatitude = payload.latitude !== null && payload.latitude !== undefined && String(payload.latitude).trim() !== "";
+  const hasLongitude = payload.longitude !== null && payload.longitude !== undefined && String(payload.longitude).trim() !== "";
+  const lat = hasLatitude ? Number(payload.latitude) : NaN;
+  const lng = hasLongitude ? Number(payload.longitude) : NaN;
   const radius = Number(payload.radiusMeters || DEFAULT_OFFICE_RADIUS_METERS);
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new Error("Latitude kantor tidak valid.");
-  if (!Number.isFinite(lng) || lng < -180 || lng > 180) throw new Error("Longitude kantor tidak valid.");
+  if (hasLatitude !== hasLongitude) throw new Error("Latitude dan longitude kantor harus diisi berpasangan.");
+  if (hasLatitude && (!Number.isFinite(lat) || lat < -90 || lat > 90)) throw new Error("Latitude kantor tidak valid.");
+  if (hasLongitude && (!Number.isFinite(lng) || lng < -180 || lng > 180)) throw new Error("Longitude kantor tidak valid.");
+  if (!allowAnyLocation && (!hasLatitude || !hasLongitude)) throw new Error("Koordinat kantor wajib diisi jika mode bebas lokasi dimatikan.");
   if (!Number.isInteger(radius) || radius < 30 || radius > 1000) throw new Error("Radius kantor harus 30–1.000 meter.");
-  setSetting_("office_latitude", String(lat));
-  setSetting_("office_longitude", String(lng));
+  if (hasLatitude && hasLongitude) {
+    setSetting_("office_latitude", String(lat));
+    setSetting_("office_longitude", String(lng));
+  }
   setSetting_("office_radius_meters", String(radius));
-  log_("office.geofence.updated", actor.nik, "Office coordinates and radius updated");
+  setSetting_("office_allow_any_location", allowAnyLocation ? "TRUE" : "FALSE");
+  log_("office.geofence.updated", actor.nik, "Office coordinates/radius updated; allowAnyLocation=" + allowAnyLocation);
   return { office: officeSettings_(), saved: true };
 }
 
@@ -78,7 +87,7 @@ function checkIn_(user, payload) {
       accuracy_masuk: location.accuracy, status: "HADIR", created_at: now
     };
     appendObject_(sh, item);
-    log_("attendance.check_in", user.nik, "GPS check-in accepted; distance " + Math.round(location.distance) + "m");
+    log_("attendance.check_in", user.nik, "GPS check-in accepted; distance " + (location.distance === null ? "unrestricted" : Math.round(location.distance) + "m"));
     return { saved: true, record: publicAttendance_(item), distanceMeters: Math.round(location.distance) };
   } finally {
     lock.releaseLock();
@@ -130,8 +139,10 @@ function validateOfficeLocation_(payload) {
   if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > MAX_GPS_ACCURACY_METERS) {
     throw new Error("Akurasi GPS terlalu rendah. Coba di area terbuka dan ambil lokasi kembali.");
   }
-  const distance = haversineMeters_(lat, lng, office.latitude, office.longitude);
-  if (distance > office.radiusMeters) {
+  const hasOfficePoint = office.configured;
+  const distance = hasOfficePoint ? haversineMeters_(lat, lng, office.latitude, office.longitude) : null;
+  if (!office.allowAnyLocation && !hasOfficePoint) throw new Error("Lokasi kantor belum diatur administrator.");
+  if (!office.allowAnyLocation && distance > office.radiusMeters) {
     throw new Error("Kamu berada di luar area kantor (" + Math.round(distance) + " m dari titik kantor).");
   }
   return { latitude: lat, longitude: lng, accuracy: accuracy, distance: distance };
