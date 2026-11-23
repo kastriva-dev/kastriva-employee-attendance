@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useEffect,useRef,useState,type ChangeEvent} from "react";
+import {useCallback,useEffect,useRef,useState} from "react";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Attendance={attendance_id:string;tanggal:string;jam_masuk:string|Date|null;jam_pulang:string|Date|null;status:string};
@@ -55,7 +55,10 @@ export default function AttendancePage(){
   const [photoData,setPhotoData]=useState("");
   const [photoPreview,setPhotoPreview]=useState("");
   const [pendingAction,setPendingAction]=useState<"attendance.checkIn"|"attendance.checkOut"|null>(null);
-  const cameraRef=useRef<HTMLInputElement>(null);
+  const videoRef=useRef<HTMLVideoElement>(null);
+  const streamRef=useRef<MediaStream|null>(null);
+  const [cameraOpen,setCameraOpen]=useState(false);
+  const [cameraReady,setCameraReady]=useState(false);
 
   const refresh=useCallback(async()=>{
     const d=await api("attendance.today");
@@ -70,6 +73,35 @@ export default function AttendancePage(){
       .catch(()=>{window.location.href="/";})
       .finally(()=>setChecking(false));
   },[refresh]);
+
+  function stopLiveCamera(){
+    streamRef.current?.getTracks().forEach(track=>track.stop());
+    streamRef.current=null;
+    if(videoRef.current)videoRef.current.srcObject=null;
+    setCameraOpen(false);setCameraReady(false);
+  }
+
+  async function openLiveCamera(){
+    if(!navigator.mediaDevices?.getUserMedia)throw new Error("Kamera langsung tidak didukung browser ini. Gunakan Chrome terbaru melalui HTTPS.");
+    stopLiveCamera();
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"user"},width:{ideal:1280},height:{ideal:720}}});
+      streamRef.current=stream;setCameraOpen(true);setCameraReady(false);
+    }catch(e){
+      const name=e instanceof Error?e.name:"";
+      if(name==="NotAllowedError"||name==="PermissionDeniedError")throw new Error("Izin kamera ditolak. Izinkan akses kamera pada browser untuk melakukan absensi.");
+      if(name==="NotFoundError"||name==="DevicesNotFoundError")throw new Error("Kamera tidak ditemukan pada perangkat ini.");
+      throw new Error("Kamera tidak dapat dibuka. Pastikan kamera tidak sedang digunakan aplikasi lain, lalu coba lagi.");
+    }
+  }
+
+  useEffect(()=>{
+    if(!cameraOpen||!videoRef.current||!streamRef.current)return;
+    const video=videoRef.current;video.srcObject=streamRef.current;
+    video.play().then(()=>setCameraReady(true)).catch(()=>setError("Video kamera gagal dimulai. Tutup aplikasi lain yang menggunakan kamera lalu coba lagi."));
+  },[cameraOpen]);
+
+  useEffect(()=>()=>{streamRef.current?.getTracks().forEach(track=>track.stop());},[]);
 
   async function locate(){
     setBusy(true);setError("");setNotice("");
@@ -96,30 +128,24 @@ export default function AttendancePage(){
       setNotice("GPS terkunci. Mengambil alamat lokasi...");
       try{const address=await reverseGeocode(p);setGeoAddress(address);}
       catch{setGeoAddress("");}
-      setNotice("GPS siap. Silakan ambil selfie menggunakan kamera depan.");
-      window.setTimeout(()=>cameraRef.current?.click(),150);
+      setNotice("GPS siap. Membuka kamera langsung...");
+      await openLiveCamera();
+      setNotice("Kamera aktif. Ambil foto langsung dari kamera untuk melanjutkan.");
     }catch(e){setError(e instanceof Error?e.message:"Gagal mengambil lokasi GPS.");}
     finally{setBusy(false);}
   }
 
-  async function handleSelfie(event:ChangeEvent<HTMLInputElement>){
-    const file=event.target.files?.[0];event.target.value="";
-    if(!file)return;
-    if(!file.type.startsWith("image/")){setError("File kamera tidak valid.");return;}
+  function captureLiveSelfie(){
+    const video=videoRef.current;
+    if(!video||!streamRef.current||!cameraReady||video.readyState<2){setError("Kamera belum siap. Tunggu gambar kamera tampil, lalu coba lagi.");return;}
     if(!geo||!pendingAction){setError("Ambil lokasi GPS terlebih dahulu.");return;}
     setBusy(true);setError("");
     try{
-      const source=await new Promise<HTMLImageElement>((resolve,reject)=>{
-        const url=URL.createObjectURL(file);const img=new Image();
-        img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
-        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Foto tidak dapat dibaca."));};
-        img.src=url;
-      });
-      const scale=Math.min(1,960/Math.max(source.width,source.height));
+      const scale=Math.min(1,960/Math.max(video.videoWidth,video.videoHeight));
       const canvas=document.createElement("canvas");
-      canvas.width=Math.round(source.width*scale);canvas.height=Math.round(source.height*scale);
+      canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
       const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Tidak dapat memproses foto.");
-      ctx.drawImage(source,0,0,canvas.width,canvas.height);
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
       const h=Math.max(125,Math.round(canvas.height*0.25));
       ctx.fillStyle="rgba(8,22,38,.78)";ctx.fillRect(0,canvas.height-h,canvas.width,h);
       const size=Math.max(13,Math.round(canvas.width*0.027));ctx.fillStyle="#fff";
@@ -131,8 +157,9 @@ export default function AttendancePage(){
       ctx.fillText(addressLine.length>105?addressLine.slice(0,102)+"…":addressLine,16,canvas.height-h+size*3.7,canvas.width-32);
       ctx.fillText("GPS "+geo.latitude.toFixed(6)+", "+geo.longitude.toFixed(6)+" • ±"+Math.round(geo.accuracy)+" m",16,canvas.height-h+size*4.9,canvas.width-32);
       const data=canvas.toDataURL("image/jpeg",0.68);
-      if(data.length>235000)throw new Error("Ukuran foto masih terlalu besar. Ambil ulang dengan resolusi kamera lebih rendah.");
-      setPhotoData(data);setPhotoPreview(data);setNotice("Selfie siap. Periksa foto, lalu kirim absensi.");
+      if(data.length>235000)throw new Error("Ukuran foto masih terlalu besar. Coba ambil ulang.");
+      setPhotoData(data);setPhotoPreview(data);setNotice("Selfie kamera langsung siap. Periksa foto, lalu kirim absensi.");
+      stopLiveCamera();
     }catch(e){setError(e instanceof Error?e.message:"Gagal memproses selfie.");}
     finally{setBusy(false);}
   }
@@ -145,13 +172,13 @@ export default function AttendancePage(){
       const d=await api(pendingAction,{...p,photoData});
       setRecord(d.record||null);
       setNotice((pendingAction==="attendance.checkIn"?"Absensi masuk":"Absensi pulang")+" berhasil dicatat beserta selfie. Jarak dari titik kantor: "+d.distanceMeters+" meter.");
-      setPhotoData("");setPhotoPreview("");setPendingAction(null);
+      setPhotoData("");setPhotoPreview("");setPendingAction(null);stopLiveCamera();
     }catch(e){setError(e instanceof Error?e.message:"Absensi gagal.");}
     finally{setBusy(false);}
   }
 
   async function logout(){
-    setBusy(true);
+    stopLiveCamera();setBusy(true);
     try{await api("auth.logout");}finally{window.location.href="/";}
   }
 
@@ -183,13 +210,13 @@ export default function AttendancePage(){
           </div>
           <p className="attendance-muted">{office?.configured?"Radius kantor aktif: "+office.radiusMeters+" meter.":"Lokasi kantor belum dikonfigurasi oleh administrator."} GPS harus memiliki akurasi maksimal 200 meter.</p>
           {geo&&<p className="attendance-muted">Lokasi perangkat: {geo.latitude.toFixed(6)}, {geo.longitude.toFixed(6)} · akurasi ±{Math.round(geo.accuracy)} m</p>}
-          <input ref={cameraRef} type="file" accept="image/*" capture="user" onChange={handleSelfie} style={{display:"none"}} />
+          {cameraOpen&&<div style={{marginTop:18,maxWidth:480}}><video ref={videoRef} autoPlay muted playsInline style={{display:"block",width:"100%",aspectRatio:"4 / 3",objectFit:"cover",borderRadius:14,background:"#071827",border:"1px solid #d7e0e8"}}/><p className="attendance-muted">{cameraReady?"Kamera langsung aktif. Pastikan wajah terlihat jelas.":"Mengaktifkan kamera..."}</p><div className="attendance-actions"><button onClick={captureLiveSelfie} disabled={busy||!cameraReady}>Ambil Foto</button><button className="secondary" onClick={()=>{stopLiveCamera();setPendingAction(null);setNotice("Pengambilan selfie dibatalkan.");}} disabled={busy}>Batalkan</button></div></div>}
           <div className="attendance-actions">
             <button className="secondary" onClick={locate} disabled={busy}>Ambil lokasi GPS</button>
             <button onClick={()=>prepareAttendance("attendance.checkIn")} disabled={busy||!office?.configured||checkedIn}><span>Absen Masuk</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
             <button onClick={()=>prepareAttendance("attendance.checkOut")} disabled={busy||!office?.configured||!checkedIn||checkedOut}><span>Absen Pulang</span><small style={{display:"block",fontSize:10,fontWeight:500,opacity:.82,marginTop:3}}>Wajib selfie</small></button>
           </div>
-          {photoPreview&&<div style={{marginTop:18,maxWidth:360}}><img src={photoPreview} alt="Pratinjau selfie absensi" style={{width:"100%",borderRadius:14,border:"1px solid #d7e0e8"}}/><p className="attendance-muted">Selfie dengan watermark waktu dan koordinat GPS.</p><div className="attendance-actions"><button onClick={()=>cameraRef.current?.click()} className="secondary" disabled={busy}>Ambil ulang</button><button onClick={submitAttendance} disabled={busy}>{busy?"Mengirim...":"Kirim Absensi"}</button></div></div>}
+          {photoPreview&&<div style={{marginTop:18,maxWidth:360}}><img src={photoPreview} alt="Pratinjau selfie absensi" style={{width:"100%",borderRadius:14,border:"1px solid #d7e0e8"}}/><p className="attendance-muted">Selfie dengan watermark waktu dan koordinat GPS.</p><div className="attendance-actions"><button onClick={async()=>{setPhotoData("");setPhotoPreview("");setError("");try{await openLiveCamera();}catch(e){setError(e instanceof Error?e.message:"Kamera gagal dibuka.");}}} className="secondary" disabled={busy}>Ambil ulang</button><button onClick={submitAttendance} disabled={busy}>{busy?"Mengirim...":"Kirim Absensi"}</button></div></div>}
           {checkedOut&&<p className="attendance-success">Absensi hari ini sudah lengkap.</p>}
           {error&&<p className="attendance-error">{error}</p>}
           {notice&&<p className="attendance-success">{notice}</p>}
