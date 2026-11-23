@@ -67,6 +67,9 @@ function getAttendancePhoto_(admin, payload) {
     nama: String(record.nama || ""),
     nik: String(record.nik || ""),
     tanggal: dateKey,
-    capturedAt: phase === "masuk" ? record.jam_masuk || "" : record.jam_pulang || ""
+    capturedAt: phase === "masuk" ? record.jam_masuk || "" : record.jam_pulang || "",
+    latitude: Number(phase === "masuk" ? record.lat_masuk : record.lat_pulang) || null,
+    longitude: Number(phase === "masuk" ? record.lng_masuk : record.lng_pulang) || null,
+    accuracy: Number(phase === "masuk" ? record.accuracy_masuk : record.accuracy_pulang) || null
   };
 }
