@@ -1,5 +1,6 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
+import * as XLSX from "xlsx-js-style";
 
 type User={employee_id:string;nik:string;nama:string;jabatan:string;role:string;status:string};
 type Employee={employee_id:string;nik:string;nama:string};
@@ -97,11 +98,49 @@ export default function AttendanceHistoryPage(){
       const result=await api("attendance.export",{from,to,employee_id:employeeId});
       const headers=["ID Absensi","ID Karyawan","Nama","NIK","Tanggal","Jam Masuk","Jam Pulang","Status","Latitude Masuk","Longitude Masuk","Akurasi Masuk (m)","Latitude Pulang","Longitude Pulang","Akurasi Pulang (m)"];
       const fields=["attendance_id","employee_id","nama","nik","tanggal","jam_masuk","jam_pulang","status","latitude_masuk","longitude_masuk","akurasi_masuk","latitude_pulang","longitude_pulang","akurasi_pulang"];
-      const quote=(v:unknown)=>'"'+String(v??"").replace(/"/g,'""')+'"';
-      const lines=[headers.map(quote).join(";"),...(result.records||[]).map((row:Record<string,unknown>)=>fields.map(k=>quote(row[k])).join(";"))];
-      const blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
-      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="rekap-absensi-"+(from||"awal")+"-sd-"+(to||"terakhir")+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-      setExportMessage((result.total||0)+" baris berhasil diekspor. File CSV dapat dibuka langsung di Microsoft Excel.");
+      const rows=(result.records||[]) as Record<string,unknown>[];
+      const navy="17365D",blue="DCEAF7",pale="F3F7FC",white="FFFFFF",line="D7E1EC",ink="24364B";
+      const aoa:unknown[][]=[
+        ["REKAP ABSENSI KARYAWAN"],
+        ["Periode",from||"Awal data","s.d.",to||"Data terakhir"],
+        ["Total data",rows.length,"Diekspor",new Date().toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})],
+        [],
+        headers,
+        ...rows.map(row=>fields.map(key=>row[key]??""))
+      ];
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:13}}];
+      ws["!cols"]=[{wch:22},{wch:19},{wch:25},{wch:17},{wch:14},{wch:22},{wch:22},{wch:15},{wch:17},{wch:18},{wch:19},{wch:17},{wch:18},{wch:19}];
+      ws["!rows"]=[{hpt:30},{hpt:22},{hpt:22},{hpt:10},{hpt:28}];
+      const range=XLSX.utils.decode_range(ws["!ref"]||"A1:N5");
+      for(let R=0;R<=range.e.r;R++){
+        for(let C=0;C<=13;C++){
+          const address=XLSX.utils.encode_cell({r:R,c:C});
+          const cell=ws[address];
+          if(!cell)continue;
+          cell.s={font:{name:"Aptos",sz:10,color:{rgb:ink}},alignment:{vertical:"center",wrapText:R===4},border:{bottom:{style:"thin",color:{rgb:line}}}};
+          if(R===0)cell.s={font:{name:"Aptos Display",sz:16,bold:true,color:{rgb:white}},fill:{fgColor:{rgb:navy}},alignment:{vertical:"center",horizontal:"left"}};
+          else if(R===1||R===2)cell.s={font:{name:"Aptos",sz:10,bold:C%2===0,color:{rgb:ink}},fill:{fgColor:{rgb:"EAF1F8"}},alignment:{vertical:"center"}};
+          else if(R===4)cell.s={font:{name:"Aptos",sz:10,bold:true,color:{rgb:white}},fill:{fgColor:{rgb:navy}},alignment:{vertical:"center",horizontal:"center",wrapText:true},border:{bottom:{style:"medium",color:{rgb:"5B9BD5"}}}};
+          else if(R>=5)cell.s={font:{name:"Aptos",sz:10,color:{rgb:ink}},fill:{fgColor:{rgb:(R-5)%2===0?white:pale}},alignment:{vertical:"center"},border:{bottom:{style:"hair",color:{rgb:line}}}};
+        }
+      }
+      for(let R=5;R<=range.e.r;R++){
+        const statusCell=ws[XLSX.utils.encode_cell({r:R,c:7})];
+        if(statusCell&&String(statusCell.v).toUpperCase().includes("HADIR"))statusCell.s={...statusCell.s,font:{name:"Aptos",sz:10,bold:true,color:{rgb:"18794E"}},fill:{fgColor:{rgb:"E4F5EC"}},alignment:{vertical:"center",horizontal:"center"}};
+        for(const C of [8,9,10,11,12,13]){
+          const cell=ws[XLSX.utils.encode_cell({r:R,c:C})];
+          if(cell&&cell.v!==""&&cell.v!=null&&Number.isFinite(Number(cell.v)))cell.t="n";
+        }
+      }
+      ws["!autofilter"]={ref:`A5:N${Math.max(5,range.e.r+1)}`};
+      ws["!freeze"]={xSplit:0,ySplit:5,topLeftCell:"A6",activePane:"bottomLeft",state:"frozen"};
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,"Rekap Absensi");
+      wb.Props={Title:"Rekap Absensi Karyawan",Subject:"Laporan kehadiran",Author:"Kastriva Employee Attendance",CreatedDate:new Date()};
+      const fileName="rekap-absensi-"+(from||"awal")+"-sd-"+(to||"terakhir")+".xlsx";
+      XLSX.writeFile(wb,fileName,{bookType:"xlsx",compression:true});
+      setExportMessage(rows.length+" baris berhasil diekspor ke Excel (.xlsx).");
     }catch(e){setExportMessage(e instanceof Error?e.message:"Gagal mengekspor rekap.");}
     finally{setExporting(false);}
   }
@@ -135,7 +174,7 @@ export default function AttendanceHistoryPage(){
             {isAdmin&&<label>Karyawan<select value={employeeId} onChange={e=>setEmployeeId(e.target.value)}><option value="">Semua karyawan</option>{employees.map(x=><option key={x.employee_id} value={x.employee_id}>{x.nama} · {x.nik}</option>)}</select></label>}
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"14px 0"}}><button type="button" className="refresh" onClick={exportExcel} disabled={exporting}>{exporting?"Menyiapkan...":"Unduh Excel (CSV) ↓"}</button></div>{exportMessage&&<p className="attendance-muted">{exportMessage}</p>}
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"14px 0"}}><button type="button" className="refresh" onClick={exportExcel} disabled={exporting}>{exporting?"Menyiapkan...":"Unduh Excel (.xlsx) ↓"}</button></div>{exportMessage&&<p className="attendance-muted">{exportMessage}</p>}
           {error&&<p className="auth-error">{error}</p>}
           <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th>{!isAdmin&&<><th>Jam masuk</th><th>Jam pulang</th></>}<th>Status</th>{isAdmin&&<><th>Foto masuk · waktu</th><th>Foto pulang · waktu</th></>}</tr></thead><tbody>
             {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td>{!isAdmin&&<><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td></>}<td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
