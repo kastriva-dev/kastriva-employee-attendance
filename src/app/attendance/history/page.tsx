@@ -70,6 +70,8 @@ export default function AttendanceHistoryPage(){
   const [photo,setPhoto]=useState<PhotoPreview|null>(null);
   const [photoZoom,setPhotoZoom]=useState(1);
   const [timestampCopied,setTimestampCopied]=useState(false);
+  const [exporting,setExporting]=useState(false);
+  const [exportMessage,setExportMessage]=useState("");
   const limit=50;
   const load=useCallback(async(nextOffset=0)=>{
     setBusy(true);setError("");
@@ -89,6 +91,20 @@ export default function AttendanceHistoryPage(){
       await load(0);
     }).catch(()=>{window.location.href="/";});
   },[load]);
+  async function exportExcel(){
+    setExporting(true);setExportMessage("");
+    try{
+      const result=await api("attendance.export",{from,to,employee_id:employeeId});
+      const headers=["ID Absensi","ID Karyawan","Nama","NIK","Tanggal","Jam Masuk","Jam Pulang","Status","Latitude Masuk","Longitude Masuk","Akurasi Masuk (m)","Latitude Pulang","Longitude Pulang","Akurasi Pulang (m)"];
+      const fields=["attendance_id","employee_id","nama","nik","tanggal","jam_masuk","jam_pulang","status","latitude_masuk","longitude_masuk","akurasi_masuk","latitude_pulang","longitude_pulang","akurasi_pulang"];
+      const quote=(v:unknown)=>'"'+String(v??"").replace(/"/g,'""')+'"';
+      const lines=[headers.map(quote).join(";"),...(result.records||[]).map((row:Record<string,unknown>)=>fields.map(k=>quote(row[k])).join(";"))];
+      const blob=new Blob(["\\uFEFF"+lines.join("\\r\\n")],{type:"text/csv;charset=utf-8"});
+      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="rekap-absensi-"+(from||"awal")+"-sd-"+(to||"terakhir")+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+      setExportMessage((result.total||0)+" baris berhasil diekspor. File CSV dapat dibuka langsung di Microsoft Excel.");
+    }catch(e){setExportMessage(e instanceof Error?e.message:"Gagal mengekspor rekap.");}
+    finally{setExporting(false);}
+  }
   const isAdmin=user?.role==="admin";
   useEffect(()=>{setPhotoZoom(1);setTimestampCopied(false);},[photo?.dataUrl]);
   const copyPhotoTimestamp=async()=>{
@@ -119,6 +135,7 @@ export default function AttendanceHistoryPage(){
             {isAdmin&&<label>Karyawan<select value={employeeId} onChange={e=>setEmployeeId(e.target.value)}><option value="">Semua karyawan</option>{employees.map(x=><option key={x.employee_id} value={x.employee_id}>{x.nama} · {x.nik}</option>)}</select></label>}
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"14px 0"}}><button type="button" className="refresh" onClick={exportExcel} disabled={exporting}>{exporting?"Menyiapkan...":"Unduh Excel (CSV) ↓"}</button></div>{exportMessage&&<p className="attendance-muted">{exportMessage}</p>}
           {error&&<p className="auth-error">{error}</p>}
           <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th>{!isAdmin&&<><th>Jam masuk</th><th>Jam pulang</th></>}<th>Status</th>{isAdmin&&<><th>Foto masuk · waktu</th><th>Foto pulang · waktu</th></>}</tr></thead><tbody>
             {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td>{!isAdmin&&<><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td></>}<td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
