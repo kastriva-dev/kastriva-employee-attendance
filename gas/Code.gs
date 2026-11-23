@@ -55,6 +55,15 @@ function doPost(e) {
       case "attendance.list":
         data = listAttendanceHistory_(requireSession_(body.sessionToken), payload);
         break;
+      case "attendance.export":
+        data = exportAttendanceRecords_(requireSession_(body.sessionToken), payload);
+        break;
+      case "settings.photoRetention.get":
+        data = getPhotoRetentionSettings_(requireAdmin_(body.sessionToken));
+        break;
+      case "settings.photoRetention.update":
+        data = updatePhotoRetentionSettings_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "attendance.photo":
         data = getAttendancePhoto_(requireAdmin_(body.sessionToken), payload);
         break;
@@ -361,4 +370,37 @@ function dashboardSummary_() {
     attendanceCount: attendance.length,
     recentAttendance: recent
   };
+}
+
+
+/** Export all filtered attendance rows, with employee access constrained to self. */
+function exportAttendanceRecords_(user, payload) {
+  const from = String(payload.from || "").trim();
+  const to = String(payload.to || "").trim();
+  const employeeId = String(payload.employee_id || "").trim();
+  const status = String(payload.status || "").trim().toUpperCase();
+  if (from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
+  if (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
+  if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
+  const isAdmin = user.role === "admin";
+  const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
+    const date = attendanceDateKey_(r.tanggal);
+    if (!isAdmin && String(r.employee_id) !== String(user.employee_id)) return false;
+    if (isAdmin && employeeId && String(r.employee_id) !== employeeId) return false;
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    if (status && String(r.status || "").toUpperCase() !== status) return false;
+    return true;
+  }).sort(function(a,b) {
+    return (attendanceDateKey_(a.tanggal) + String(a.nama || "")).localeCompare(attendanceDateKey_(b.tanggal) + String(b.nama || ""));
+  });
+  return { exportedAt: new Date().toISOString(), total: rows.length, records: rows.map(function(r) {
+    return {
+      attendance_id: String(r.attendance_id || ""), employee_id: String(r.employee_id || ""),
+      nama: String(r.nama || ""), nik: String(r.nik || ""), tanggal: attendanceDateKey_(r.tanggal),
+      jam_masuk: r.jam_masuk || "", jam_pulang: r.jam_pulang || "", status: String(r.status || ""),
+      latitude_masuk: r.lat_masuk || "", longitude_masuk: r.lng_masuk || "", akurasi_masuk: r.accuracy_masuk || "",
+      latitude_pulang: r.lat_pulang || "", longitude_pulang: r.lng_pulang || "", akurasi_pulang: r.accuracy_pulang || ""
+    };
+  }) };
 }
