@@ -49,6 +49,12 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = setEmployeeStatus_(payload);
         break;
+      case "employees.update":
+        data = updateEmployee_(requireAdmin_(body.sessionToken), payload);
+        break;
+      case "employees.delete":
+        data = deleteEmployee_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "attendance.today":
         data = getTodayAttendance_(requireSession_(body.sessionToken));
         break;
@@ -254,6 +260,66 @@ function setEmployeeStatus_(payload) {
   }
   sh.getRange(user._row, headerMap_(sh).status).setValue(status);
   return { updated: true, employee_id: id, status: status };
+}
+
+/** Update employee profile; PIN is optional and is re-hashed when supplied. */
+function updateEmployee_(admin, payload) {
+  const id = String(payload.employee_id || "").trim();
+  const nik = String(payload.nik || "").trim();
+  const nama = String(payload.nama || "").trim();
+  const jabatan = String(payload.jabatan || "").trim();
+  const role = String(payload.role || "employee").toLowerCase();
+  const pin = String(payload.pin || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (!/^\\d{6,20}$/.test(nik)) throw new Error("NIK harus 6–20 digit.");
+  if (!nama || nama.length > 100) throw new Error("Nama wajib diisi (maksimal 100 karakter).");
+  if (["admin", "employee"].indexOf(role) < 0) throw new Error("Role tidak valid.");
+  if (pin && !/^\\d{6,12}$/.test(pin)) throw new Error("PIN baru harus 6–12 digit.");
+  const sh = sheet_("Employees"), rows = readObjects_(sh);
+  const user = rows.find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+  if (rows.some(function(r) { return String(r.nik) === nik && String(r.employee_id) !== id; })) throw new Error("NIK sudah digunakan karyawan lain.");
+  if (String(user.status).toUpperCase() === "DELETED") throw new Error("Akun yang diarsipkan harus dipulihkan sebelum diedit.");
+  if (String(user.status).toUpperCase() === "ACTIVE" && user.role === "admin" && role !== "admin") {
+    const admins = rows.filter(function(r) { return r.role === "admin" && String(r.status).toUpperCase() === "ACTIVE"; });
+    if (admins.length <= 1) throw new Error("Tidak dapat mengubah role satu-satunya admin aktif.");
+  }
+  const map = headerMap_(sh);
+  sh.getRange(user._row, map.nik).setValue(nik);
+  sh.getRange(user._row, map.nama).setValue(nama);
+  sh.getRange(user._row, map.jabatan).setValue(jabatan);
+  sh.getRange(user._row, map.role).setValue(role);
+  if (pin) {
+    const salt = Utilities.getUuid().replace(/-/g, "");
+    sh.getRange(user._row, map.pin_salt).setValue(salt);
+    sh.getRange(user._row, map.pin_hash).setValue(hashPin_(pin, salt));
+  }
+  log_("employees.updated", admin.nik, "Updated employee " + id + (pin ? " with PIN reset" : ""));
+  return { updated: true, employee_id: id };
+}
+
+/** Archive employee rather than deleting the row, preserving attendance history. */
+function deleteEmployee_(admin, payload) {
+  const id = String(payload.employee_id || "").trim();
+  if (!id) throw new Error("ID karyawan tidak valid.");
+  if (id === String(admin.employee_id)) throw new Error("Anda tidak dapat mengarsipkan akun yang sedang digunakan.");
+  const sh = sheet_("Employees"), rows = readObjects_(sh);
+  const user = rows.find(function(r) { return String(r.employee_id) === id; });
+  if (!user) throw new Error("Karyawan tidak ditemukan.");
+  if (String(user.status).toUpperCase() === "DELETED") throw new Error("Akun sudah diarsipkan.");
+  if (user.role === "admin" && String(user.status).toUpperCase() === "ACTIVE") {
+    const admins = rows.filter(function(r) { return r.role === "admin" && String(r.status).toUpperCase() === "ACTIVE"; });
+    if (admins.length <= 1) throw new Error("Tidak dapat mengarsipkan satu-satunya admin aktif.");
+  }
+  const map = headerMap_(sh);
+  sh.getRange(user._row, map.status).setValue("DELETED");
+  const sessions = readObjects_(sheet_("Sessions"));
+  const sessionMap = headerMap_(sheet_("Sessions"));
+  sessions.filter(function(s) { return String(s.employee_id) === id && !s.revoked_at; }).forEach(function(s) {
+    sheet_("Sessions").getRange(s._row, sessionMap.revoked_at).setValue(new Date());
+  });
+  log_("employees.archived", admin.nik, "Archived employee " + id);
+  return { deleted: true, archived: true, employee_id: id };
 }
 
 function ensureHeaders_(sh, expected) {
