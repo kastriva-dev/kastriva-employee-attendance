@@ -90,7 +90,7 @@ export default function AttendanceHistoryPage(){
     }).catch(()=>{window.location.href="/";});
   },[load]);
   const isAdmin=user?.role==="admin";
-  useEffect(()=>{setPhotoZoom(1);setTimestampCopied(false);},[photo?.attendance_id,photo?.phase,photo?.capturedAt]);
+  useEffect(()=>{setPhotoZoom(1);setTimestampCopied(false);},[photo?.dataUrl]);
   const copyPhotoTimestamp=async()=>{
     if(!photo?.capturedAt)return;
     const value=dateTimeLabel(photo.capturedAt)+" WIB";
