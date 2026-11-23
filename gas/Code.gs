@@ -424,7 +424,19 @@ function listAuditLogs_(admin, payload) {
   if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
   if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
   if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
-  const rows = readObjects_(sheet_("Logs")).filter(function(r) {
+  const employees = readObjects_(sheet_("Employees"));
+  const rows = readObjects_(sheet_("Logs")).map(function(r) {
+    const actorKey = String(r.actor_employee_id || r.actor || "").trim();
+    const actorUser = employees.find(function(u) {
+      return String(u.employee_id || "").trim() === actorKey ||
+        String(u.nik || "").trim() === actorKey ||
+        String(u.nik || "").trim() === String(r.actor || "").trim();
+    });
+    if (!r.actor_name && actorUser) r.actor_name = actorUser.nama || actorUser.name || "";
+    if (!r.actor_employee_id && actorUser) r.actor_employee_id = actorUser.employee_id || "";
+    if (!r.actor_role && actorUser) r.actor_role = actorUser.role || "";
+    return r;
+  }).filter(function(r) {
     const date = r.created_at instanceof Date ? Utilities.formatDate(r.created_at, "Asia/Jakarta", "yyyy-MM-dd") : Utilities.formatDate(new Date(r.created_at), "Asia/Jakarta", "yyyy-MM-dd");
     if (from && date < from) return false;
     if (to && date > to) return false;
@@ -438,7 +450,7 @@ function listAuditLogs_(admin, payload) {
   return { total: rows.length, limit: limit, offset: offset, records: rows.slice(offset, offset+limit).map(function(r) {
     return {
       log_id:String(r.log_id || ""), event:String(r.event || ""), actor:String(r.actor || ""),
-      actor_employee_id:String(r.actor_employee_id || ""), actor_name:String(r.actor_name || r.actor || ""),
+      actor_employee_id:String(r.actor_employee_id || ""), actor_name:String(r.actor_name || ""),
       actor_role:String(r.actor_role || ""), target_employee_id:String(r.target_employee_id || ""),
       target_name:String(r.target_name || ""), target_nik:String(r.target_nik || ""),
       detail:String(r.detail || ""), before_value:String(r.before_value || ""), after_value:String(r.after_value || ""),
