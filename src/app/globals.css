@@ -117,3 +117,28 @@
 }
 html{scroll-padding-bottom:90px}
 button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+
+
+/* Monthly attendance analytics */
+.monthly-dashboard{overflow:hidden}
+.monthly-controls{display:flex;align-items:center;gap:8px}
+.monthly-controls input{height:38px;border:1px solid #dfe6ee;border-radius:9px;padding:0 10px;color:#526579;background:#fff;font:11px 'DM Sans',sans-serif}
+.monthly-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.monthly-metrics article{background:#fff;border:1px solid #e8edf3;border-radius:12px;padding:16px;display:grid;gap:7px;min-width:0}
+.monthly-metrics article small,.monthly-statuses>div>small{font-size:10px;color:#8795a5;font-weight:700;letter-spacing:.6px}
+.monthly-metrics article strong{font:800 25px Manrope;color:#173653}
+.monthly-metrics article span{font-size:10px;color:#8b97a6;line-height:1.5}
+.monthly-chart-panel{border:1px solid #e8edf3;background:#fff;border-radius:12px;padding:18px;margin-top:12px}
+.monthly-chart-panel .section-heading{margin:0 0 18px}
+.monthly-chart-panel .section-heading h2{font:700 15px Manrope;margin:5px 0}
+.monthly-bars{height:150px;display:flex;align-items:stretch;gap:4px;overflow-x:auto;padding:0 2px 2px}
+.monthly-bar-col{flex:1;min-width:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px}
+.monthly-bar-track{height:124px;width:100%;max-width:22px;background:#f0f4f8;border-radius:5px 5px 2px 2px;display:flex;align-items:flex-end;overflow:hidden}
+.monthly-bar-track i{display:block;width:100%;min-height:0;background:linear-gradient(180deg,#69a9d8,#246094);border-radius:5px 5px 0 0}
+.monthly-bar-col small{font-size:9px;color:#8795a5}
+.monthly-statuses{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.monthly-statuses>div{border:1px solid #e8edf3;border-radius:12px;padding:16px;background:#fff}
+.monthly-status-list{display:grid;gap:8px;margin-top:12px}
+.monthly-status-list span{display:flex;justify-content:space-between;gap:10px;color:#667589;font-size:11px}
+.monthly-status-list b{color:#173653}
+@media(max-width:800px){.monthly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.monthly-statuses{grid-template-columns:1fr}.monthly-dashboard .section-heading{align-items:flex-start;gap:12px;flex-direction:column}.monthly-controls{width:100%}.monthly-controls input{flex:1;min-width:0}}
