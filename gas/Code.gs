@@ -234,7 +234,8 @@ function createEmployee_(admin, payload) {
   if (["admin", "employee"].indexOf(role) < 0) throw new Error("Role tidak valid.");
   const sh = sheet_("Employees");
   if (readObjects_(sh).some(function(r) { return String(r.nik) === nik; })) throw new Error("NIK sudah terdaftar.");
-  const employee = addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });\n  log_("employees.created", admin.nik, "Created employee " + employee.employee_id, {target_employee_id:employee.employee_id,target_name:employee.nama,target_nik:employee.nik,after_value:{nama:employee.nama,jabatan:employee.jabatan,role:employee.role,status:employee.status}});\n  return employee;
+  const employee = addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });
+  log_("employees.created", admin.nik, "Created employee " + employee.employee_id, {target_employee_id:employee.employee_id,target_name:employee.nama,target_nik:employee.nik,after_value:{nama:employee.nama,jabatan:employee.jabatan,role:employee.role,status:employee.status}});\n  return employee;
 }
 
 function addEmployee_(sh, input) {
@@ -265,7 +266,9 @@ function setEmployeeStatus_(admin, payload) {
     const admins = readObjects_(sh).filter(function(r) { return r.role === "admin" && String(r.status).toUpperCase() === "ACTIVE"; });
     if (admins.length <= 1) throw new Error("Tidak dapat menonaktifkan satu-satunya admin aktif.");
   }
+  const previousStatus = String(user.status || "");
   sh.getRange(user._row, headerMap_(sh).status).setValue(status);
+  log_("employees.status_changed", admin.nik, "Changed employee status " + id, {target_employee_id:id,target_name:user.nama,target_nik:user.nik,before_value:{status:previousStatus},after_value:{status:status}});
   return { updated: true, employee_id: id, status: status };
 }
 
