@@ -449,7 +449,7 @@ function dashboardMonthlySummary_(payload) {
   const now = new Date();
   const currentMonth = Utilities.formatDate(now, timezone, "yyyy-MM");
   const month = String(payload.month || currentMonth).trim();
-  if (!/^\\d{4}-\\d{2}$/.test(month)) throw new Error("Periode bulan tidak valid.");
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Periode bulan tidak valid.");
   const parts = month.split("-").map(Number);
   const year = parts[0], monthNumber = parts[1];
   if (monthNumber < 1 || monthNumber > 12 || year < 2000 || year > 2100) throw new Error("Periode bulan tidak valid.");
