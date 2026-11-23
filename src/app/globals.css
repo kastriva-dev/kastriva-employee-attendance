@@ -564,3 +564,14 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
     padding:12px 14px !important;
   }
 }
+
+
+/* Administrator audit trail */
+.audit-item{border-left:3px solid #7aa8cf}
+.audit-item .leave-item-head small{display:block;margin-top:7px;color:#718198;font-size:12px}
+.audit-change{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.audit-change>div{min-width:0;padding:12px;border:1px solid #e3eaf2;border-radius:12px;background:#f8fbff}
+.audit-change small,.audit-id{font-size:10px;letter-spacing:1px;color:#7b8da3;font-weight:700}
+.audit-change pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 'DM Sans',sans-serif;color:#33465d;margin:8px 0 0}
+.audit-id{display:block;margin-top:10px;letter-spacing:0}
+@media(max-width:600px){.audit-change{grid-template-columns:1fr}}
