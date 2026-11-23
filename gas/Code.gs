@@ -235,7 +235,8 @@ function createEmployee_(admin, payload) {
   const sh = sheet_("Employees");
   if (readObjects_(sh).some(function(r) { return String(r.nik) === nik; })) throw new Error("NIK sudah terdaftar.");
   const employee = addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });
-  log_("employees.created", admin.nik, "Created employee " + employee.employee_id, {target_employee_id:employee.employee_id,target_name:employee.nama,target_nik:employee.nik,after_value:{nama:employee.nama,jabatan:employee.jabatan,role:employee.role,status:employee.status}});\n  return employee;
+  log_("employees.created", admin.nik, "Created employee " + employee.employee_id, {target_employee_id:employee.employee_id,target_name:employee.nama,target_nik:employee.nik,after_value:{nama:employee.nama,jabatan:employee.jabatan,role:employee.role,status:employee.status}});
+  return employee;
 }
 
 function addEmployee_(sh, input) {
