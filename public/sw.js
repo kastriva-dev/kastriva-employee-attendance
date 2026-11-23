@@ -7,7 +7,8 @@ self.addEventListener("fetch",event=>{
   if(request.method!=="GET")return;
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
-  if(url.pathname.startsWith("/api/")||url.pathname.startsWith("/attendance")||url.pathname.startsWith("/leave")||url.pathname==="/")return;
+  if(request.mode==="navigate"){event.respondWith(fetch(request).catch(()=>caches.match("/offline.html")));return;}
+  if(url.pathname.startsWith("/api/"))return;
   if(request.destination==="image"||url.pathname.startsWith("/_next/static/")||STATIC.includes(url.pathname)){
     event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{
       if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(request,copy));}
