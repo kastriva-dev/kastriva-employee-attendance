@@ -41,6 +41,10 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = dashboardSummary_();
         break;
+      case "dashboard.monthly":
+        requireAdmin_(body.sessionToken);
+        data = dashboardMonthlySummary_(payload);
+        break;
       case "employees.create":
         requireAdmin_(body.sessionToken);
         data = { employee: createEmployee_(payload) };
@@ -435,6 +439,72 @@ function dashboardSummary_() {
     notYetPresent: Math.max(0, activeEmployees.length - present),
     attendanceCount: attendance.length,
     recentAttendance: recent
+  };
+}
+
+
+/** Monthly dashboard metrics. Read-only: never creates sheets or modifies production rows. */
+function dashboardMonthlySummary_(payload) {
+  const timezone = "Asia/Jakarta";
+  const now = new Date();
+  const currentMonth = Utilities.formatDate(now, timezone, "yyyy-MM");
+  const month = String(payload.month || currentMonth).trim();
+  if (!/^\\d{4}-\\d{2}$/.test(month)) throw new Error("Periode bulan tidak valid.");
+  const parts = month.split("-").map(Number);
+  const year = parts[0], monthNumber = parts[1];
+  if (monthNumber < 1 || monthNumber > 12 || year < 2000 || year > 2100) throw new Error("Periode bulan tidak valid.");
+  const monthStart = month + "-01";
+  const nextMonthDate = new Date(Date.UTC(year, monthNumber, 1));
+  const nextMonth = Utilities.formatDate(nextMonthDate, "UTC", "yyyy-MM-dd");
+  const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const employees = readObjects_(sheet_("Employees"));
+  const activeEmployees = employees.filter(function(r) { return String(r.status).toUpperCase() === "ACTIVE"; });
+  const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
+    const date = attendanceDateKey_(r.tanggal);
+    return date >= monthStart && date < nextMonth;
+  });
+  const daily = {};
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = month + "-" + (day < 10 ? "0" : "") + day;
+    daily[key] = { date: key, present: 0, checkOut: 0, records: 0 };
+  }
+  let present = 0, checkOut = 0;
+  const statusCounts = {};
+  rows.forEach(function(r) {
+    const date = attendanceDateKey_(r.tanggal);
+    if (!daily[date]) return;
+    const status = String(r.status || "TANPA STATUS").toUpperCase();
+    statusCounts[status] = (statusCounts[status] || 0) + 1;
+    daily[date].records++;
+    if (r.jam_masuk || status === "HADIR") { present++; daily[date].present++; }
+    if (r.jam_pulang) { checkOut++; daily[date].checkOut++; }
+  });
+  let leaveSummary = { total: 0, pending: 0, approved: 0, rejected: 0 };
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
+  const ss = spreadsheetId ? SpreadsheetApp.openById(spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
+  const leavesSheet = ss ? ss.getSheetByName("Leaves") : null;
+  if (leavesSheet && leavesSheet.getLastRow() > 1) {
+    readObjects_(leavesSheet).forEach(function(r) {
+      const start = String(r.tanggal_mulai || "");
+      const end = String(r.tanggal_selesai || start);
+      if (!start || !end || end < monthStart || start >= nextMonth) return;
+      const status = String(r.status || "PENDING").toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(leaveSummary, status)) leaveSummary[status]++;
+      leaveSummary.total++;
+    });
+  }
+  return {
+    month: month,
+    daysInMonth: daysInMonth,
+    totalEmployees: employees.length,
+    activeEmployees: activeEmployees.length,
+    inactiveEmployees: employees.length - activeEmployees.length,
+    attendanceRecords: rows.length,
+    present: present,
+    checkOut: checkOut,
+    statusCounts: statusCounts,
+    leaveRequests: leaveSummary,
+    dailyTrend: Object.keys(daily).sort().map(function(key) { return daily[key]; })
   };
 }
 
