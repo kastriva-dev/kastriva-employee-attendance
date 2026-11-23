@@ -95,7 +95,7 @@ function createLeaveRequest_(user, payload) {
       reviewed_at:"", reviewed_by:""
     };
     appendObject_(sh,item);
-    log_("leave.created",user.nik,item.request_id + " " + jenis + " " + start + "–" + end);
+    log_("leave.created",user.nik,item.request_id + " " + jenis + " " + start + "–" + end,{target_employee_id:user.employee_id,target_name:user.nama,target_nik:user.nik,after_value:{status:"PENDING",jenis:jenis,tanggal_mulai:start,tanggal_selesai:end}});
     return {saved:true,request:{request_id:item.request_id,status:item.status}};
   } finally { lock.releaseLock(); }
 }
@@ -119,7 +119,7 @@ function reviewLeaveRequest_(admin, payload) {
     sh.getRange(item._row,map.catatan_admin).setValue(note);
     sh.getRange(item._row,map.reviewed_at).setValue(now);
     sh.getRange(item._row,map.reviewed_by).setValue(admin.nik);
-    log_("leave.reviewed",admin.nik,id + " " + status);
+    log_("leave.reviewed",admin.nik,id + " " + status,{target_employee_id:item.employee_id,target_name:item.nama,target_nik:item.nik,before_value:{status:"PENDING"},after_value:{status:status,catatan_admin:note}});
     return {updated:true,request_id:id,status:status};
   } finally { lock.releaseLock(); }
 }
