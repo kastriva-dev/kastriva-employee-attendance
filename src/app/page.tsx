@@ -20,7 +20,7 @@ export default function Home(){
   const [pin,setPin]=useState("");
   const [employees,setEmployees]=useState<Employee[]>([]);
   const [summary,setSummary]=useState<DashboardSummary|null>(null);
-  const [monthlyMonth,setMonthlyMonth]=useState(()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit"}).format(new Date()));
+  const [monthlyMonth,setMonthlyMonth]=useState(()=>{const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit"}).formatToParts(new Date());const year=parts.find(p=>p.type==="year")?.value||"2026";const month=parts.find(p=>p.type==="month")?.value||"01";return year+"-"+month;});
   const [monthly,setMonthly]=useState<MonthlySummary|null>(null);
   const [monthlyBusy,setMonthlyBusy]=useState(false);
   const [monthlyError,setMonthlyError]=useState("");
