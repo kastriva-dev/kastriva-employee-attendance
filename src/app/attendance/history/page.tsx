@@ -171,7 +171,7 @@ export default function AttendanceHistoryPage(){
     <aside className="workspace-side">
       <div className="auth-brand"><img src="/kastriva-employee-attendance-mark.svg" alt="Kastriva"/><span><strong>KASTRIVA</strong><small>EMPLOYEE SYSTEM</small></span></div>
       <div className="side-caption">WORKSPACE</div>
-      <a className="side-link" href="/"><span className="nav-icon">▦</span><span className="nav-label">Ringkasan</span></a>
+      <a className="side-link" href="/"><span className="nav-icon">▦</span><span className="nav-label">Dashboard</span></a>
       <a className="side-link" href="/attendance"><span className="nav-icon">◎</span><span className="nav-label">Absensi GPS</span></a>
       <a className="side-link active" aria-current="page" href="/attendance/history"><span className="nav-icon">▤</span><span className="nav-label">Riwayat</span></a>
       <a className="side-link" href="/leave"><span className="nav-icon">▧</span><span className="nav-label">Izin & Cuti</span></a>
