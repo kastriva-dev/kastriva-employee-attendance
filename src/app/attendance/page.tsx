@@ -22,6 +22,14 @@ async function api(action:string,payload:Record<string,unknown>={}) {
   return result.data;
 }
 
+function formatAttendanceDate(value:string|undefined){
+  if(!value)return "Memuat tanggal...";
+  const dateOnly=value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date=dateOnly?new Date(Number(dateOnly[1]),Number(dateOnly[2])-1,Number(dateOnly[3])):new Date(value);
+  if(Number.isNaN(date.getTime()))return value;
+  return date.toLocaleDateString("id-ID",{...(dateOnly?{}:{timeZone:"Asia/Jakarta"}),day:"numeric",month:"long",year:"numeric"});
+}
+
 function getPosition():Promise<Geo>{
   return new Promise((resolve,reject)=>{
     if(!("geolocation" in navigator)){reject(new Error("Browser tidak mendukung GPS."));return;}
@@ -205,7 +213,7 @@ export default function AttendancePage(){
         <a className="attendance-back" href="/">← Kembali ke dashboard</a>
         <section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Catat kehadiran<br/><em>dengan lokasi GPS.</em></h2><p>Absensi hanya diterima jika perangkat berada dalam radius kantor yang ditentukan administrator.</p></div><div className="welcome-mark">GPS</div></section>
         <section className="attendance-card">
-          <div className="section-heading"><div><small>KEHADIRAN HARI INI</small><h2>{record?.tanggal||new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"})}</h2></div><button className="refresh" onClick={()=>refresh()} disabled={busy}>Perbarui ↻</button></div>
+          <div className="section-heading"><div><small>KEHADIRAN HARI INI</small><h2>{formatAttendanceDate(record?.tanggal)}</h2></div><button className="refresh" onClick={()=>refresh()} disabled={busy}>Perbarui ↻</button></div>
           <div className="attendance-status">
             <div className="attendance-chip">Masuk: <b>{timeLabel(record?.jam_masuk)}</b></div>
             <div className="attendance-chip">Pulang: <b>{timeLabel(record?.jam_pulang)}</b></div>
