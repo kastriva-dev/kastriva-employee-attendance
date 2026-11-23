@@ -421,3 +421,48 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
 @media(prefers-reduced-motion:reduce){
   .workspace:before,.workspace:after{filter:none}
 }
+
+
+/* Soft Blue Glass — visible decorative pattern layer */
+.workspace{
+  background-color:#f3f8fe;
+  background-image:
+    radial-gradient(circle at 12% 14%,rgba(92,157,211,.23) 0,rgba(92,157,211,0) 24%),
+    radial-gradient(circle at 88% 22%,rgba(135,190,232,.25) 0,rgba(135,190,232,0) 26%),
+    radial-gradient(circle at 72% 88%,rgba(171,207,237,.28) 0,rgba(171,207,237,0) 28%),
+    radial-gradient(circle,rgba(65,119,168,.13) 1px,transparent 1.5px),
+    repeating-linear-gradient(135deg,rgba(94,148,195,.045) 0,rgba(94,148,195,.045) 1px,transparent 1px,transparent 18px),
+    linear-gradient(135deg,#f8fbff 0%,#eaf3fc 52%,#f7faff 100%);
+  background-size:auto,auto,auto,22px 22px,auto,auto;
+  background-attachment:fixed;
+}
+.workspace:before{
+  width:460px;height:460px;top:110px;right:7%;
+  border:1px solid rgba(87,148,199,.13);
+  background:
+    radial-gradient(circle,rgba(124,183,225,.19) 0%,rgba(124,183,225,.08) 42%,transparent 70%);
+  box-shadow:0 0 0 28px rgba(112,169,211,.035),0 0 0 58px rgba(112,169,211,.025);
+}
+.workspace:after{
+  width:340px;height:340px;bottom:3%;left:18%;
+  border:1px solid rgba(87,148,199,.12);
+  background:
+    radial-gradient(circle,rgba(156,197,229,.22) 0%,rgba(156,197,229,.07) 48%,transparent 72%);
+  box-shadow:0 0 0 24px rgba(112,169,211,.035),0 0 0 50px rgba(112,169,211,.022);
+}
+.workspace-main{z-index:1}
+.workspace-side{position:relative;z-index:2}
+@media(max-width:800px){
+  .workspace{
+    background-attachment:scroll;
+    background-image:
+      radial-gradient(circle at 8% 8%,rgba(92,157,211,.22) 0,transparent 28%),
+      radial-gradient(circle at 92% 32%,rgba(135,190,232,.24) 0,transparent 28%),
+      radial-gradient(circle,rgba(65,119,168,.12) 1px,transparent 1.5px),
+      repeating-linear-gradient(135deg,rgba(94,148,195,.04) 0,rgba(94,148,195,.04) 1px,transparent 1px,transparent 18px),
+      linear-gradient(145deg,#f8fbff 0%,#eaf3fc 55%,#f8fbff 100%);
+    background-size:auto,auto,22px 22px,auto,auto;
+  }
+  .workspace:before{width:260px;height:260px;top:95px;right:-90px}
+  .workspace:after{width:220px;height:220px;bottom:100px;left:-85px}
+}
