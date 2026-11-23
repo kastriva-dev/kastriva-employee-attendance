@@ -37,6 +37,9 @@ function doPost(e) {
         requireAdmin_(body.sessionToken);
         data = { employees: listEmployees_() };
         break;
+      case "logs.list":
+        data = listAuditLogs_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "dashboard.summary":
         requireAdmin_(body.sessionToken);
         data = dashboardSummary_();
@@ -120,7 +123,7 @@ function setupSystem() {
     Employees: ["employee_id", "nik", "nama", "jabatan", "role", "pin_salt", "pin_hash", "status", "created_at", "last_login"],
     Attendance: ["attendance_id", "employee_id", "nik", "nama", "tanggal", "jam_masuk", "foto_masuk", "lat_masuk", "lng_masuk", "accuracy_masuk", "jam_pulang", "foto_pulang", "lat_pulang", "lng_pulang", "accuracy_pulang", "status", "created_at"],
     Settings: ["key", "value", "updated_at"],
-    Logs: ["log_id", "event", "actor", "detail", "created_at"],
+    Logs: ["log_id", "event", "actor", "actor_employee_id", "actor_name", "actor_role", "target_employee_id", "target_name", "target_nik", "detail", "before_value", "after_value", "created_at"],
     Sessions: ["session_id", "employee_id", "token_hash", "expires_at", "created_at", "revoked_at"]
   };
   Object.keys(schemas).forEach(function(name) {
@@ -380,8 +383,61 @@ function sha256_(value) {
   return bytes.map(function(b) { const v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? "0" + v : v; }).join("");
 }
 
-function log_(event, actor, detail) {
-  try { sheet_("Logs").appendRow([Utilities.getUuid(), event, actor, detail, new Date()]); } catch (e) { console.warn(e); }
+function log_(event, actor, detail, meta) {
+  try {
+    const sh = sheet_("Logs");
+    const headers = ["log_id","event","actor","actor_employee_id","actor_name","actor_role","target_employee_id","target_name","target_nik","detail","before_value","after_value","created_at"];
+    ensureHeaders_(sh, headers);
+    const actorNik = String(actor || "");
+    const users = readObjects_(sheet_("Employees"));
+    const actorUser = users.find(function(u) { return String(u.nik) === actorNik || String(u.employee_id) === actorNik; });
+    const m = meta || {};
+    const row = {
+      log_id: Utilities.getUuid(), event: String(event || ""), actor: actorNik,
+      actor_employee_id: actorUser ? actorUser.employee_id : "",
+      actor_name: actorUser ? actorUser.nama : actorNik,
+      actor_role: actorUser ? actorUser.role : "",
+      target_employee_id: m.target_employee_id || "",
+      target_name: m.target_name || "",
+      target_nik: m.target_nik || "",
+      detail: String(detail || ""),
+      before_value: m.before_value === undefined ? "" : JSON.stringify(m.before_value),
+      after_value: m.after_value === undefined ? "" : JSON.stringify(m.after_value),
+      created_at: new Date()
+    };
+    sh.appendRow(headers.map(function(h) { return row[h] === undefined ? "" : row[h]; }));
+  } catch (e) { console.warn(e); }
+}
+
+function listAuditLogs_(admin, payload) {
+  const from = String(payload.from || "").trim();
+  const to = String(payload.to || "").trim();
+  const event = String(payload.event || "").trim();
+  const actor = String(payload.actor || "").trim().toLowerCase();
+  if (from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
+  if (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
+  if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
+  const rows = readObjects_(sheet_("Logs")).filter(function(r) {
+    const date = r.created_at instanceof Date ? Utilities.formatDate(r.created_at, "Asia/Jakarta", "yyyy-MM-dd") : Utilities.formatDate(new Date(r.created_at), "Asia/Jakarta", "yyyy-MM-dd");
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    if (event && String(r.event || "") !== event) return false;
+    const identity = (String(r.actor_name || r.actor || "") + " " + String(r.actor || "")).toLowerCase();
+    if (actor && identity.indexOf(actor) < 0) return false;
+    return true;
+  }).sort(function(a,b) { return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(); });
+  const limit = Math.min(200, Math.max(1, Number(payload.limit) || 100));
+  const offset = Math.max(0, Number(payload.offset) || 0);
+  return { total: rows.length, limit: limit, offset: offset, records: rows.slice(offset, offset+limit).map(function(r) {
+    return {
+      log_id:String(r.log_id || ""), event:String(r.event || ""), actor:String(r.actor || ""),
+      actor_employee_id:String(r.actor_employee_id || ""), actor_name:String(r.actor_name || r.actor || ""),
+      actor_role:String(r.actor_role || ""), target_employee_id:String(r.target_employee_id || ""),
+      target_name:String(r.target_name || ""), target_nik:String(r.target_nik || ""),
+      detail:String(r.detail || ""), before_value:String(r.before_value || ""), after_value:String(r.after_value || ""),
+      created_at:r.created_at || ""
+    };
+  }) };
 }
 
 function safeError_(err) {
