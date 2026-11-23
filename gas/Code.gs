@@ -50,11 +50,11 @@ function doPost(e) {
         break;
       case "employees.create":
         requireAdmin_(body.sessionToken);
-        data = { employee: createEmployee_(payload) };
+        data = { employee: createEmployee_(requireAdmin_(body.sessionToken), payload) };
         break;
       case "employees.setStatus":
         requireAdmin_(body.sessionToken);
-        data = setEmployeeStatus_(payload);
+        data = setEmployeeStatus_(requireAdmin_(body.sessionToken), payload);
         break;
       case "employees.update":
         data = updateEmployee_(requireAdmin_(body.sessionToken), payload);
@@ -222,7 +222,7 @@ function listEmployees_() {
   });
 }
 
-function createEmployee_(payload) {
+function createEmployee_(admin, payload) {
   const nik = String(payload.nik || "").trim();
   const nama = String(payload.nama || "").trim();
   const pin = String(payload.pin || "").trim();
@@ -234,7 +234,7 @@ function createEmployee_(payload) {
   if (["admin", "employee"].indexOf(role) < 0) throw new Error("Role tidak valid.");
   const sh = sheet_("Employees");
   if (readObjects_(sh).some(function(r) { return String(r.nik) === nik; })) throw new Error("NIK sudah terdaftar.");
-  return addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });
+  const employee = addEmployee_(sh, { nik: nik, nama: nama, jabatan: jabatan, role: role, pin: pin, status: "ACTIVE" });\n  log_("employees.created", admin.nik, "Created employee " + employee.employee_id, {target_employee_id:employee.employee_id,target_name:employee.nama,target_nik:employee.nik,after_value:{nama:employee.nama,jabatan:employee.jabatan,role:employee.role,status:employee.status}});\n  return employee;
 }
 
 function addEmployee_(sh, input) {
@@ -254,7 +254,7 @@ function addEmployee_(sh, input) {
   return { employee_id: item.employee_id, nik: item.nik, nama: item.nama, jabatan: item.jabatan, role: item.role, status: item.status };
 }
 
-function setEmployeeStatus_(payload) {
+function setEmployeeStatus_(admin, payload) {
   const id = String(payload.employee_id || "").trim();
   const status = String(payload.status || "").toUpperCase();
   if (!id || ["ACTIVE", "INACTIVE"].indexOf(status) < 0) throw new Error("Parameter status tidak valid.");
