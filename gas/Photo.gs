@@ -42,7 +42,7 @@ function getAttendancePhoto_(admin, payload) {
 
   const settings = readObjects_(sheet_("Settings"));
   const retentionRow = settings.find(function(r) { return String(r.key) === "photo_retention_days"; });
-  const retentionDays = Math.max(1, Math.min(14, Number(retentionRow && retentionRow.value) || 14));
+  const retentionDays = Math.max(1, Math.min(365, Number(retentionRow && retentionRow.value) || 14));
   const dateKey = attendanceDateKey_(record.tanggal);
   const parts = dateKey.split("-");
   const recordDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
@@ -72,4 +72,79 @@ function getAttendancePhoto_(admin, payload) {
     longitude: Number(phase === "masuk" ? record.lng_masuk : record.lng_pulang) || null,
     accuracy: Number(phase === "masuk" ? record.accuracy_masuk : record.accuracy_pulang) || null
   };
+}
+
+
+/** Read the configurable private-photo retention policy. */
+function getPhotoRetentionSettings_(admin) {
+  if (!admin || admin.role !== "admin") throw new Error("Akses khusus administrator.");
+  const rows = readObjects_(sheet_("Settings"));
+  const row = rows.find(function(r) { return String(r.key) === "photo_retention_days"; });
+  return { retentionDays: Math.max(1, Math.min(365, Number(row && row.value) || 14)), schedule: "Harian sekitar pukul 02.00 WIB", scope: "File foto Drive saja; data absensi tetap disimpan." };
+}
+
+/** Update retention period. Existing attendance rows are never deleted. */
+function updatePhotoRetentionSettings_(admin, payload) {
+  if (!admin || admin.role !== "admin") throw new Error("Akses khusus administrator.");
+  const days = Number(payload.retentionDays);
+  if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error("Masa simpan foto harus 1 sampai 365 hari.");
+  setSetting_("photo_retention_days", String(days));
+  setSetting_("delete_photos_only", "TRUE");
+  ensurePhotoRetentionTrigger_();
+  log_("settings.photo_retention.updated", admin.nik, "Photo retention set to " + days + " days");
+  return getPhotoRetentionSettings_(admin);
+}
+
+/** Create one daily time-driven cleanup trigger; safe to run more than once. */
+function ensurePhotoRetentionTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === "cleanupExpiredAttendancePhotos";
+  });
+  if (!exists) ScriptApp.newTrigger("cleanupExpiredAttendancePhotos").timeBased().everyDays(1).atHour(2).create();
+  return { installed: true };
+}
+
+/**
+ * Daily trigger: move expired photo files to Drive trash and clear only photo IDs.
+ * Attendance rows, timestamps, GPS coordinates, employee IDs and statuses remain intact.
+ */
+function cleanupExpiredAttendancePhotos() {
+  const settings = readObjects_(sheet_("Settings"));
+  const retentionRow = settings.find(function(r) { return String(r.key) === "photo_retention_days"; });
+  const days = Math.max(1, Math.min(365, Number(retentionRow && retentionRow.value) || 14));
+  const sh = sheet_("Attendance");
+  const map = headerMap_(sh);
+  const rows = readObjects_(sh);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let deleted = 0, missing = 0, failed = 0;
+  rows.forEach(function(r) {
+    const key = attendanceDateKey_(r.tanggal);
+    const parts = key.split("-");
+    if (parts.length !== 3) return;
+    const recordDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const age = Math.floor((today.getTime() - recordDate.getTime()) / 86400000);
+    if (!Number.isFinite(age) || age <= days) return;
+    ["foto_masuk", "foto_pulang"].forEach(function(field) {
+      const fileId = String(r[field] || "").trim();
+      if (!fileId || !map[field]) return;
+      try {
+        const file = DriveApp.getFileById(fileId);
+        if (!file.isTrashed()) file.setTrashed(true);
+        sh.getRange(r._row, map[field]).clearContent();
+        deleted++;
+      } catch (err) {
+        // A file already removed from Drive is also safe to detach from its record.
+        try {
+          DriveApp.getFileById(fileId);
+          failed++;
+        } catch (notFound) {
+          sh.getRange(r._row, map[field]).clearContent();
+          missing++;
+        }
+      }
+    });
+  });
+  log_("photos.retention.cleanup", "SYSTEM", "retention=" + days + "d; trashed=" + deleted + "; missing=" + missing + "; failed=" + failed);
+  return { retentionDays: days, trashed: deleted, missing: missing, failed: failed, attendanceRowsPreserved: true };
 }
