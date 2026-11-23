@@ -414,8 +414,8 @@ function listAuditLogs_(admin, payload) {
   const to = String(payload.to || "").trim();
   const event = String(payload.event || "").trim();
   const actor = String(payload.actor || "").trim().toLowerCase();
-  if (from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
-  if (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
+  if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
+  if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
   if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
   const rows = readObjects_(sheet_("Logs")).filter(function(r) {
     const date = r.created_at instanceof Date ? Utilities.formatDate(r.created_at, "Asia/Jakarta", "yyyy-MM-dd") : Utilities.formatDate(new Date(r.created_at), "Asia/Jakarta", "yyyy-MM-dd");
@@ -571,8 +571,8 @@ function exportAttendanceRecords_(user, payload) {
   const to = String(payload.to || "").trim();
   const employeeId = String(payload.employee_id || "").trim();
   const status = String(payload.status || "").trim().toUpperCase();
-  if (from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
-  if (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
+  if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new Error("Tanggal awal tidak valid.");
+  if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Tanggal akhir tidak valid.");
   if (from && to && from > to) throw new Error("Rentang tanggal tidak valid.");
   const isAdmin = user.role === "admin";
   const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
