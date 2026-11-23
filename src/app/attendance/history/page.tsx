@@ -106,11 +106,24 @@ export default function AttendanceHistoryPage(){
         ["Total data",rows.length,"Diekspor",new Date().toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})],
         [],
         headers,
-        ...rows.map(row=>fields.map(key=>row[key]??""))
+        ...rows.map(row=>fields.map(key=>{
+          const value=row[key];
+          if(value==null||value==="")return "";
+          if(key==="jam_masuk"||key==="jam_pulang"){
+            const date=new Date(String(value));
+            return Number.isNaN(date.getTime())?String(value):new Intl.DateTimeFormat("id-ID",{timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(date);
+          }
+          if(key==="tanggal"){
+            const raw=String(value);
+            const match=raw.match(/^(\\d{4}-\\d{2}-\\d{2})/);
+            return match?match[1]:raw;
+          }
+          return value;
+        }))
       ];
       const ws=XLSX.utils.aoa_to_sheet(aoa);
       ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:13}}];
-      ws["!cols"]=[{wch:22},{wch:19},{wch:25},{wch:17},{wch:14},{wch:22},{wch:22},{wch:15},{wch:17},{wch:18},{wch:19},{wch:17},{wch:18},{wch:19}];
+      ws["!cols"]=[{wch:22},{wch:19},{wch:25},{wch:17},{wch:14},{wch:12},{wch:12},{wch:15},{wch:17},{wch:18},{wch:19},{wch:17},{wch:18},{wch:19}];
       ws["!rows"]=[{hpt:30},{hpt:22},{hpt:22},{hpt:10},{hpt:28}];
       const range=XLSX.utils.decode_range(ws["!ref"]||"A1:N5");
       for(let R=0;R<=range.e.r;R++){
