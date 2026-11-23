@@ -405,7 +405,7 @@ function log_(event, actor, detail, meta) {
       after_value: m.after_value === undefined ? "" : JSON.stringify(m.after_value),
       created_at: new Date()
     };
-    sh.appendRow(headers.map(function(h) { return row[h] === undefined ? "" : row[h]; }));
+    const map = headerMap_(sh);\n    const values = new Array(sh.getLastColumn()).fill("");\n    headers.forEach(function(h) { if (map[h]) values[map[h]-1] = row[h] === undefined ? "" : row[h]; });\n    sh.appendRow(values);
   } catch (e) { console.warn(e); }
 }
 
