@@ -21,10 +21,14 @@ export default function Home(){
   const [summary,setSummary]=useState<DashboardSummary|null>(null);
   const [form,setForm]=useState({nik:"",nama:"",jabatan:"",pin:"",role:"employee"});
   const [notice,setNotice]=useState("");
+  const [retentionDays,setRetentionDays]=useState(14);
+  const [retentionBusy,setRetentionBusy]=useState(false);
+  const [retentionNotice,setRetentionNotice]=useState("");
 
   async function loadEmployees(){const d=await api("employees.list");setEmployees(d.employees||[]);}
   async function loadSummary(){const d=await api("dashboard.summary");setSummary(d);}
-  async function loadAdminData(){await Promise.all([loadEmployees(),loadSummary()]);}
+  async function loadAdminData(){const results=await Promise.all([loadEmployees(),loadSummary(),api("settings.photoRetention.get")]);setRetentionDays(results[2].retentionDays||14);}
+  async function saveRetention(){setRetentionBusy(true);setRetentionNotice("");try{const d=await api("settings.photoRetention.update",{retentionDays});setRetentionDays(d.retentionDays);setRetentionNotice("Pengaturan tersimpan. Pembersihan foto berjalan otomatis setiap hari sekitar pukul 02.00 WIB.");}catch(e){setRetentionNotice(e instanceof Error?e.message:"Gagal menyimpan pengaturan.");}finally{setRetentionBusy(false);}}
   useEffect(()=>{api("auth.me").then(async d=>{setUser(d.user);if(d.user?.role==="admin")await loadAdminData();}).catch(()=>{}).finally(()=>setChecking(false));},[]);
 
   async function login(e:React.FormEvent){
@@ -87,7 +91,7 @@ export default function Home(){
         <div className="employee-list">{employees.map(item=><div className="employee-row" key={item.employee_id}><div className="employee-avatar">{item.nama.slice(0,1).toUpperCase()}</div><div className="employee-info"><b>{item.nama}</b><small>{item.nik} · {item.jabatan||"Tanpa jabatan"} · {item.role}</small></div><span className={item.status==="ACTIVE"?"status-active":"status-inactive"}>{item.status}</span><button className="status-toggle" disabled={busy} onClick={()=>toggleStatus(item)}>{item.status==="ACTIVE"?"Nonaktifkan":"Aktifkan"}</button></div>)}</div>
       <p><a href="/attendance">Absensi GPS</a>　·　<a href="/attendance/history">Riwayat absensi</a>　·　<a href="/leave">Ajukan izin atau cuti</a></p></section></>}
       {user.role!=="admin"&&<section className="employee-section"><div className="section-heading"><div><small>ATTENDANCE</small><h2>Modul layanan karyawan</h2></div><span>Terhubung ke sistem</span></div><p>Gunakan absensi GPS untuk mencatat kehadiran, lihat riwayat pribadi, dan ajukan izin atau cuti melalui sistem yang tersimpan di Google Sheets.</p></section>}
-      <footer className="workspace-footer">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · v0.2.0</span></footer></div>
+      <section className="employee-section"><div className="section-heading"><div><small>STORAGE & PRIVACY</small><h2>Pengaturan masa simpan foto absensi</h2><p>Hanya file foto di Google Drive yang dihapus. Data rekap, waktu, GPS, dan status absensi tetap disimpan.</p></div></div><div className="employee-form" style={{gridTemplateColumns:"minmax(0,240px) auto"}}><label>Simpan foto selama (hari)<input type="number" min="1" max="365" value={retentionDays} onChange={e=>setRetentionDays(Number(e.target.value))}/></label><button type="button" onClick={saveRetention} disabled={retentionBusy}>{retentionBusy?"Menyimpan...":"Simpan pengaturan"}</button></div><p className="attendance-muted">Contoh: 14 hari berarti foto yang usianya lebih dari 14 hari akan dipindahkan ke Sampah Google Drive oleh proses otomatis harian. Baris absensi tidak dihapus. Jadwal: sekitar pukul 02.00 WIB (waktu Google Apps Script dapat bergeser).</p>{retentionNotice&&<p className="success-note">{retentionNotice}</p>}</section><footer className="workspace-footer">© 2026 Kastriva. All rights reserved.<span>Employee Attendance · v0.2.0</span></footer></div>
     </section>
   </main>;
 }
