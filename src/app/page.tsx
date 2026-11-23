@@ -27,7 +27,7 @@ export default function Home(){
 
   async function loadEmployees(){const d=await api("employees.list");setEmployees(d.employees||[]);}
   async function loadSummary(){const d=await api("dashboard.summary");setSummary(d);}
-  async function loadAdminData(){const results=await Promise.all([loadEmployees(),loadSummary(),api("settings.photoRetention.get")]);setRetentionDays(results[2].retentionDays||14);}
+  async function loadAdminData(){await Promise.all([loadEmployees(),loadSummary()]);try{const settings=await api("settings.photoRetention.get");setRetentionDays(settings.retentionDays||14);}catch{/* GAS deployment may be updated separately; keep existing dashboard usable. */}}
   async function saveRetention(){setRetentionBusy(true);setRetentionNotice("");try{const d=await api("settings.photoRetention.update",{retentionDays});setRetentionDays(d.retentionDays);setRetentionNotice("Pengaturan tersimpan. Pembersihan foto berjalan otomatis setiap hari sekitar pukul 02.00 WIB.");}catch(e){setRetentionNotice(e instanceof Error?e.message:"Gagal menyimpan pengaturan.");}finally{setRetentionBusy(false);}}
   useEffect(()=>{api("auth.me").then(async d=>{setUser(d.user);if(d.user?.role==="admin")await loadAdminData();}).catch(()=>{}).finally(()=>setChecking(false));},[]);
 
