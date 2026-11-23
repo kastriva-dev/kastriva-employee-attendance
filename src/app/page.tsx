@@ -11,6 +11,7 @@ async function api(action:string,payload:Record<string,unknown>={}) {
   if(!response.ok||!result.ok) throw new Error(result.error||"Permintaan gagal.");
   return result.data;
 }
+function formatDashboardDate(value:string|undefined){if(!value)return "Memuat tanggal...";const dateOnly=value.match(/^(\d{4})-(\d{2})-(\d{2})$/);const date=dateOnly?new Date(Number(dateOnly[1]),Number(dateOnly[2])-1,Number(dateOnly[3])):new Date(value);if(Number.isNaN(date.getTime()))return value;return date.toLocaleDateString("id-ID",{...(dateOnly?{}:{timeZone:"Asia/Jakarta"}),day:"numeric",month:"long",year:"numeric"});}
 export default function Home(){
   const [user,setUser]=useState<User|null>(null);
   const [checking,setChecking]=useState(true);
@@ -78,7 +79,7 @@ export default function Home(){
       <div className="workspace-content"><section className="welcome-panel"><div><span className="welcome-tag">KASTRIVA EMPLOYEE ATTENDANCE</span><h2>Sistem kehadiran<br/><em>yang lebih terukur.</em></h2><p>Pantau kehadiran tim dan kelola data karyawan melalui satu ruang kerja digital yang terhubung ke sistem Kastriva.</p></div><div className="welcome-mark"><img src="/kastriva-employee-attendance-mark.svg" alt="" /></div></section>
       <div className="profile-panel"><div><small>AKUN AKTIF</small><h3>{user.nama}</h3><p>{user.nik} · {user.jabatan||"Tanpa jabatan"}</p></div><span className="status-active">● {user.status}</span></div>
       {user.role==="admin"&&<><section className="live-summary">
-        <div className="live-summary-head"><div><small>DATA LANGSUNG · GOOGLE SHEETS</small><h2>Ringkasan kehadiran hari ini</h2><p>{summary?.date||"Memuat tanggal..."}</p></div><button className="refresh" onClick={()=>loadAdminData()}>Perbarui data ↻</button></div>
+        <div className="live-summary-head"><div><small>DATA LANGSUNG · GOOGLE SHEETS</small><h2>Ringkasan kehadiran hari ini</h2><p>{formatDashboardDate(summary?.date)}</p></div><button className="refresh" onClick={()=>loadAdminData()}>Perbarui data ↻</button></div>
         <div className="live-summary-grid">
           <article><small>Total karyawan</small><strong>{summary?.totalEmployees??"—"}</strong><span>{summary?.activeEmployees??"—"} akun aktif</span></article>
           <article><small>Hadir hari ini</small><strong>{summary?.present??"—"}</strong><span>Catatan absensi masuk</span></article>
