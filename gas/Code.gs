@@ -68,6 +68,12 @@ function doPost(e) {
       case "attendance.list":
         data = listAttendanceHistory_(requireSession_(body.sessionToken), payload);
         break;
+      case "attendance.archive.preview":
+        data = previewAttendanceArchive_(requireAdmin_(body.sessionToken), payload);
+        break;
+      case "attendance.archive":
+        data = archiveAttendanceRecords_(requireAdmin_(body.sessionToken), payload);
+        break;
       case "attendance.export":
         data = exportAttendanceRecords_(requireSession_(body.sessionToken), payload);
         break;
@@ -481,7 +487,7 @@ function dashboardSummary_() {
   const today = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd");
   const employees = readObjects_(sheet_("Employees"));
   const attendance = readObjects_(sheet_("Attendance")).filter(function(r) {
-    return attendanceDateKey_(r.tanggal) === today;
+    return !r.archived_at && attendanceDateKey_(r.tanggal) === today;
   });
   const activeEmployees = employees.filter(function(r) {
     return String(r.status).toUpperCase() === "ACTIVE";
@@ -536,7 +542,7 @@ function dashboardMonthlySummary_(payload) {
   const activeEmployees = employees.filter(function(r) { return String(r.status).toUpperCase() === "ACTIVE"; });
   const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
     const date = attendanceDateKey_(r.tanggal);
-    return date >= monthStart && date < nextMonth;
+    return !r.archived_at && date >= monthStart && date < nextMonth;
   });
   const daily = {};
   for (let day = 1; day <= daysInMonth; day++) {
