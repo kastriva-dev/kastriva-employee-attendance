@@ -195,6 +195,7 @@ function listAttendanceHistory_(user, payload) {
   const isAdmin = user.role === "admin";
   const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
     const date = attendanceDateKey_(r.tanggal);
+    if (r.archived_at) return false;
     if (!isAdmin && String(r.employee_id) !== String(user.employee_id)) return false;
     if (isAdmin && employeeId && String(r.employee_id) !== employeeId) return false;
     if (from && date < from) return false;
@@ -226,4 +227,55 @@ function listAttendanceHistory_(user, payload) {
       };
     })
   };
+}
+
+
+/** Preview records that match a requested archive period. No data is modified. */
+function previewAttendanceArchive_(admin, payload) {
+  const from = String(payload.from || "").trim();
+  const to = String(payload.to || "").trim();
+  const employeeId = String(payload.employee_id || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    throw new Error("Tanggal awal dan akhir wajib diisi.");
+  }
+  if (from > to) throw new Error("Tanggal awal tidak boleh melewati tanggal akhir.");
+  const rows = readObjects_(sheet_("Attendance")).filter(function(r) {
+    const date = attendanceDateKey_(r.tanggal);
+    return !r.archived_at && date >= from && date <= to &&
+      (!employeeId || String(r.employee_id) === employeeId);
+  });
+  return { count: rows.length, from: from, to: to, employee_id: employeeId || "ALL" };
+}
+
+/** Soft archive matching records. Original attendance rows and photo references are preserved. */
+function archiveAttendanceRecords_(admin, payload) {
+  const preview = previewAttendanceArchive_(admin, payload);
+  if (!preview.count) return { archived: 0, from: preview.from, to: preview.to };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sh = sheet_("Attendance");
+    const headers = ["archived_at", "archived_by_employee_id", "archived_by_name", "archived_by_nik"];
+    ensureHeaders_(sh, headers);
+    const map = headerMap_(sh);
+    const now = new Date();
+    const rows = readObjects_(sh).filter(function(r) {
+      const date = attendanceDateKey_(r.tanggal);
+      return !r.archived_at && date >= preview.from && date <= preview.to &&
+        (preview.employee_id === "ALL" || String(r.employee_id) === preview.employee_id);
+    });
+    rows.forEach(function(r) {
+      sh.getRange(r._row, map.archived_at).setValue(now);
+      sh.getRange(r._row, map.archived_by_employee_id).setValue(admin.employee_id);
+      sh.getRange(r._row, map.archived_by_name).setValue(admin.nama);
+      sh.getRange(r._row, map.archived_by_nik).setValue(admin.nik);
+    });
+    log_("attendance.records_archived", admin.nik,
+      "Archived " + rows.length + " attendance records from " + preview.from + " to " + preview.to,
+      {before_value:{count:rows.length,from:preview.from,to:preview.to,employee_id:preview.employee_id},
+       after_value:{archived_count:rows.length,archived_at:now.toISOString()}});
+    return { archived: rows.length, from: preview.from, to: preview.to };
+  } finally {
+    lock.releaseLock();
+  }
 }
