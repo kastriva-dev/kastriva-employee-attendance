@@ -61,7 +61,7 @@ function getTodayAttendance_(user) {
   const today = Utilities.formatDate(new Date(), ATTENDANCE_TIMEZONE, "yyyy-MM-dd");
   const rows = readObjects_(sheet_("Attendance"));
   const record = rows.find(function(r) {
-    return String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
+    return !r.archived_at && String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
   }) || null;
   return { date: today, record: record ? publicAttendance_(record) : null, office: officeSettings_() };
 }
@@ -75,7 +75,7 @@ function checkIn_(user, payload) {
     const sh = sheet_("Attendance");
     const rows = readObjects_(sh);
     const existing = rows.find(function(r) {
-      return String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
+      return !r.archived_at && String(r.employee_id) === String(user.employee_id) && attendanceDateKey_(r.tanggal) === today;
     });
     if (existing) throw new Error("Absensi masuk hari ini sudah tercatat.");
     const now = new Date();
