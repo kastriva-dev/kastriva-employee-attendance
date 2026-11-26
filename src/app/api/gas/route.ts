@@ -8,7 +8,7 @@ const SESSION_COOKIE = "kastriva_session";
 const ALLOWED_ACTIONS = [
   "ping", "auth.login", "auth.me", "auth.logout",
   "employees.list", "logs.list", "employees.create", "employees.setStatus", "employees.update", "employees.delete", "dashboard.summary", "dashboard.monthly",
-  "attendance.today", "attendance.list", "attendance.export", "attendance.photo", "attendance.checkIn", "attendance.checkOut",
+  "attendance.today", "attendance.list", "attendance.export", "attendance.photo", "attendance.archive.preview", "attendance.archive", "attendance.checkIn", "attendance.checkOut",
   "leaves.list", "leaves.create", "leaves.review",
   "settings.office.update", "settings.photoRetention.get", "settings.photoRetention.update"
 ];
