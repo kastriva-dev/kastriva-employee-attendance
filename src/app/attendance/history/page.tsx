@@ -73,6 +73,8 @@ export default function AttendanceHistoryPage(){
   const [timestampCopied,setTimestampCopied]=useState(false);
   const [exporting,setExporting]=useState(false);
   const [exportMessage,setExportMessage]=useState("");
+  const [archiveBusy,setArchiveBusy]=useState(false);
+  const [archiveMessage,setArchiveMessage]=useState("");
   const limit=50;
   const load=useCallback(async(nextOffset=0)=>{
     setBusy(true);setError("");
@@ -92,6 +94,23 @@ export default function AttendanceHistoryPage(){
       await load(0);
     }).catch(()=>{window.location.href="/";});
   },[load]);
+  async function archivePeriod(){
+    if(!isAdmin)return;
+    if(!from||!to){setArchiveMessage("Pilih tanggal awal dan tanggal akhir terlebih dahulu.");return;}
+    if(from>to){setArchiveMessage("Tanggal awal tidak boleh melewati tanggal akhir.");return;}
+    setArchiveBusy(true);setArchiveMessage("");
+    try{
+      const preview=await api("attendance.archive.preview",{from,to,employee_id:employeeId});
+      if(!preview.count){setArchiveMessage("Tidak ada catatan aktif pada periode tersebut.");return;}
+      const target=employeeId?(employees.find(x=>x.employee_id===employeeId)?.nama||"karyawan terpilih"):"semua karyawan";
+      const ok=window.confirm("Arsipkan "+preview.count+" catatan absensi untuk "+target+" dari "+from+" sampai "+to+"? Data tetap tersimpan di Google Sheets dan tidak tampil di riwayat aktif.");
+      if(!ok)return;
+      const result=await api("attendance.archive",{from,to,employee_id:employeeId});
+      setArchiveMessage(result.archived+" catatan berhasil diarsipkan. Data asli tetap tersimpan.");
+      await load(0);
+    }catch(e){setArchiveMessage(e instanceof Error?e.message:"Gagal mengarsipkan riwayat.");}
+    finally{setArchiveBusy(false);}
+  }
   async function exportExcel(){
     setExporting(true);setExportMessage("");
     try{
@@ -188,7 +207,7 @@ export default function AttendanceHistoryPage(){
             {isAdmin&&<label>Karyawan<select value={employeeId} onChange={e=>setEmployeeId(e.target.value)}><option value="">Semua karyawan</option>{employees.map(x=><option key={x.employee_id} value={x.employee_id}>{x.nama} · {x.nik}</option>)}</select></label>}
             <button type="submit" disabled={busy}>Terapkan filter</button>
           </form>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"14px 0"}}><button type="button" className="refresh" onClick={exportExcel} disabled={exporting}>{exporting?"Menyiapkan...":"Unduh Excel (.xlsx) ↓"}</button></div>{exportMessage&&<p className="attendance-muted">{exportMessage}</p>}
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"14px 0"}}><button type="button" className="refresh" onClick={exportExcel} disabled={exporting}>{exporting?"Menyiapkan...":"Unduh Excel (.xlsx) ↓"}</button>{isAdmin&&<button type="button" className="refresh" onClick={archivePeriod} disabled={archiveBusy} style={{borderColor:"#fecaca",color:"#b91c1c"}}>{archiveBusy?"Memproses...":"Arsipkan periode"}</button>}</div>{exportMessage&&<p className="attendance-muted">{exportMessage}</p>}{archiveMessage&&<p className="attendance-muted" role="status">{archiveMessage}</p>}
           {error&&<p className="auth-error">{error}</p>}
           <div className="live-table-wrap"><table className="live-table"><thead><tr>{isAdmin&&<th>Karyawan</th>}<th>Tanggal</th><th>NIK</th>{!isAdmin&&<><th>Jam masuk</th><th>Jam pulang</th></>}<th>Status</th>{isAdmin&&<><th>Foto masuk · waktu</th><th>Foto pulang · waktu</th></>}</tr></thead><tbody>
             {records.map(r=><tr key={r.attendance_id}>{isAdmin&&<td>{r.nama}</td>}<td>{r.tanggal}</td><td>{r.nik}</td>{!isAdmin&&<><td>{timeLabel(r.jam_masuk)}</td><td>{timeLabel(r.jam_pulang)}</td></>}<td>{r.status||"—"}</td>{isAdmin&&<><td><PhotoCell record={r} phase="masuk" onPreview={setPhoto}/></td><td><PhotoCell record={r} phase="pulang" onPreview={setPhoto}/></td></>}</tr>)}
